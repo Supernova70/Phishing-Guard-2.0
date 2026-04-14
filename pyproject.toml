@@ -22,7 +22,6 @@ dependencies = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.23.0",
-    "redis>=5.0.0",
     # ── Attachment analysis libraries (Phase 6) ──────────
     "pefile>=2023.2.7",       # PE/EXE static analysis
     "olefile>=0.47",           # Legacy Office OLE analysis

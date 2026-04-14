@@ -7,6 +7,7 @@ a verdict, and stores the results in the database.
 
 import logging
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -25,19 +26,19 @@ class ScanService:
 
     def __init__(self, db: Session):
         self.db = db
-        
+
     def run_scan_by_id(self, scan_id: int) -> Optional[Scan]:
         """Load an existing scan and execute it."""
         scan = self.db.query(Scan).filter(Scan.id == scan_id).first()
         if not scan:
             return None
-            
+
         email = scan.email
         if not email:
             scan.status = ScanStatus.ERROR.value
             self.db.commit()
             return scan
-            
+
         scan.status = ScanStatus.RUNNING.value
         scan.started_at = datetime.utcnow()
         self.db.commit()
@@ -53,38 +54,32 @@ class ScanService:
         self.db.add(scan)
         self.db.flush()
         return self._execute_pipeline(scan, email)
-        
+
     def _execute_pipeline(self, scan: Scan, email: Email) -> Scan:
         """
         Execute the full email analysis pipeline.
-        Execute a full scan on an email.
 
         Runs:
             1. ML Text Analysis    → ai_score
-            2. Attachment Analysis → attachment_score  (file engine)
-
-        Future engines:
-            3. URL Analysis        → url_score         (not yet wired)
-        """
+            2. URL Analysis        → url_score  (+ writes url_results rows)
+            3. Attachment Analysis → attachment_score
+            4. Probabilistic final score + Verdict
         """
         try:
-            # ── 1. ML Text Analysis ──────────────────────
+            # ── 1. ML Text Analysis ──────────────────────────────
             text_analyzer = get_text_analyzer()
-
-            # Prefer plain text, fall back to HTML
             text = email.body_text or email.body_html or ""
             ai_result = text_analyzer.analyze(text)
-
             ai_score = ai_result.confidence
             ai_label = ai_result.label
 
-            # ── 2. URL Analysis ──────────────────
+            # ── 2. URL Analysis ───────────────────────────────────
             url_analyzer = UrlAnalyzer()
-            text = email.body_text or ""
-            html = email.body_html or ""
-            url_result = url_analyzer.analyze(text, html)
+            body_text = email.body_text or ""
+            body_html = email.body_html or ""
+            url_result = url_analyzer.analyze(body_text, body_html)
             url_score = url_result.url_score
-            
+
             # Persist each URL result row
             for ur in url_result.per_url_results:
                 db_url = UrlResult(
@@ -104,19 +99,15 @@ class ScanService:
                 )
                 self.db.add(db_url)
 
-            # ── 3. Attachment Analysis ─────────────────────────
+            # ── 3. Attachment Analysis ────────────────────────────
             attachment_analyzer = AttachmentAnalyzer()
-            # Load the attachment ORM objects (already in session via email.attachments)
             att_result = attachment_analyzer.analyze(email.attachments)
             attachment_score = att_result.attachment_score
 
-            # ── 4. Compute Final Verdict ─────────────────
-            final_score = self._compute_final_score(
-                ai_score, url_score, attachment_score
-            )
+            # ── 4. Compute Final Score + Verdict ──────────────────
+            final_score = self._compute_final_score(ai_score, url_score, attachment_score)
             classification = self._classify(final_score)
 
-            # Create verdict
             verdict = Verdict(
                 scan_id=scan.id,
                 final_score=final_score,
@@ -142,10 +133,10 @@ class ScanService:
                                 "url": u.original_url,
                                 "score": u.final_score,
                                 "vt_malicious": u.vt_malicious,
-                                "top_flags": u.heuristic_flags[:3] if u.heuristic_flags else []
+                                "top_flags": u.heuristic_flags[:3] if u.heuristic_flags else [],
                             }
                             for u in url_result.per_url_results
-                        ]
+                        ],
                     },
                     "attachment": {
                         "score": att_result.attachment_score,
@@ -160,14 +151,13 @@ class ScanService:
 
             scan.status = ScanStatus.COMPLETE.value
             scan.completed_at = datetime.utcnow()
-
             self.db.commit()
-            # Refresh to load the verdict relationship
             self.db.refresh(scan)
 
             logger.info(
                 f"Scan {scan.id} complete: "
-                f"ai={ai_score:.1f} url={url_score:.1f} att={attachment_score:.1f} → final={final_score:.1f} ({classification})"
+                f"ai={ai_score:.1f} url={url_score:.1f} att={attachment_score:.1f} "
+                f"→ final={final_score:.1f} ({classification})"
             )
             return scan
 

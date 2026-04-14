@@ -7,14 +7,10 @@ Creates and configures the FastAPI application.
 import logging
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from app.config import get_settings
 from app.api.router import api_router
-from app.models import Base
-from app.dependencies import engine
-from app.middleware.auth import ApiKeyMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +20,8 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     settings = get_settings()
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-
-    # Create tables if they don't exist (Alembic handles migrations in prod)
     logger.info("Schema managed by Alembic — run: alembic upgrade head")
-
     yield
-
     logger.info("Shutting down")
 
 
@@ -46,8 +38,6 @@ def create_app() -> FastAPI:
 
     # Mount API routes
     app.include_router(api_router)
-    
-    app.add_middleware(ApiKeyMiddleware)
 
     return app
 

@@ -7,7 +7,7 @@ attachments), and stores everything in the database.
 
 Bug fixes in this version:
   BUG 1 — message_id now read from RFC 2822 Message-ID header (with hashlib fallback)
-  BUG 2 — search_uids / UID-based fetch replaces sequence-number search
+  BUG 2 — use_uid=True on IMAPClient; all commands operate on stable UIDs
   BUG 3 — Incremental fetch via FetchState.last_uid (only new UIDs fetched)
   BUG 4 — Attachment filenames sanitized against path traversal
 """
@@ -83,10 +83,13 @@ class EmailService:
         Returns:
             (list of parsed email dicts, list of fetched UIDs)
         """
+        # use_uid=True puts ALL commands (search, fetch, copy…) into UID mode.
+        # This is the imapclient 3.x way — search_uids() no longer exists.
         client = IMAPClient(
             settings.EMAIL_HOST,
             port=settings.EMAIL_PORT,
             ssl=True,
+            use_uid=True,
         )
 
         try:
@@ -97,8 +100,8 @@ class EmailService:
             last_uid = self._load_last_uid("INBOX")
             uid_range = f"{last_uid + 1}:*"
 
-            # BUG 2 FIX — search_uids returns stable UIDs, not session sequence numbers
-            all_uids: List[int] = client.search_uids(["UID", uid_range])
+            # BUG 2 FIX — search() in UID mode returns stable UIDs
+            all_uids: List[int] = client.search(["UID", uid_range])
 
             # Apply limit — take the highest UIDs (most recent)
             recent_uids = all_uids[-limit:] if len(all_uids) > limit else all_uids

@@ -21,7 +21,6 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────
     DATABASE_URL: str = "postgresql://phishing_user:phishing_pass@postgres:5432/phishing_guard"
-    REDIS_URL: str = "redis://redis:6379/0"
 
     # ── VirusTotal ───────────────────────────────────────
     VIRUSTOTAL_API_KEYS: str = ""  # Comma-separated keys
