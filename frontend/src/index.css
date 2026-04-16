@@ -1,0 +1,290 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ─── CSS Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-page:    #0A0C10;
+  --bg-panel:   #0F1117;
+  --bg-card:    #161B24;
+  --bg-input:   #1C2333;
+
+  /* Borders */
+  --border-subtle:   #1E2736;
+  --border-default:  #253044;
+  --border-emphasis: #2D3B52;
+
+  /* Primary */
+  --primary:      #3B82F6;
+  --primary-glow: rgba(59, 130, 246, 0.15);
+
+  /* Danger */
+  --danger:       #EF4444;
+  --danger-glow:  rgba(239, 68, 68, 0.15);
+  --danger-subtle: #2D1B1B;
+
+  /* Warning */
+  --warning:       #F59E0B;
+  --warning-glow:  rgba(245, 158, 11, 0.15);
+  --warning-subtle: #2D2416;
+
+  /* Safe */
+  --safe:       #10B981;
+  --safe-glow:  rgba(16, 185, 129, 0.15);
+  --safe-subtle: #1A2D24;
+
+  /* Text */
+  --text-primary:   #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted:     #4B5563;
+  --text-danger:    #FCA5A5;
+  --text-warning:   #FCD34D;
+  --text-safe:      #6EE7B7;
+}
+
+/* ─── Global Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+/* ─── Mono Font Utility ─────────────────────────────────────────────────────── */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ─── Scrollbar Styling ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-panel);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-emphasis);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* ─── Animations ────────────────────────────────────────────────────────────── */
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100vw); }
+}
+
+@keyframes pulse-danger {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4), 0 0 20px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1), 0 0 40px rgba(239, 68, 68, 0.35);
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1), 0 0 30px rgba(245, 158, 11, 0.2);
+  }
+}
+
+@keyframes dot-bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes progress-bar {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.animate-scanline {
+  animation: scanline 4s linear infinite;
+}
+
+.animate-pulse-danger {
+  animation: pulse-danger 2s ease-in-out infinite;
+}
+
+.animate-pulse-warning {
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin 1s linear infinite;
+}
+
+/* ─── Glow Shadows ──────────────────────────────────────────────────────────── */
+.glow-danger  { box-shadow: 0 0 16px var(--danger-glow), 0 0 4px rgba(239,68,68,0.3); }
+.glow-warning { box-shadow: 0 0 16px var(--warning-glow), 0 0 4px rgba(245,158,11,0.3); }
+.glow-safe    { box-shadow: 0 0 16px var(--safe-glow), 0 0 4px rgba(16,185,129,0.3); }
+.glow-primary { box-shadow: 0 0 16px var(--primary-glow), 0 0 4px rgba(59,130,246,0.3); }
+
+/* ─── Card Base ─────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.card-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+/* ─── Table Styles ──────────────────────────────────────────────────────────── */
+.dark-table thead tr {
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.dark-table thead th {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.75rem 1rem;
+  text-align: left;
+}
+
+.dark-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 200ms ease;
+  cursor: pointer;
+}
+
+.dark-table tbody tr:hover {
+  background: var(--bg-input);
+}
+
+.dark-table tbody td {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* ─── Input Base ────────────────────────────────────────────────────────────── */
+.dark-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 200ms;
+  font-family: 'Inter', sans-serif;
+}
+
+.dark-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.dark-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ─── Button Base ───────────────────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 200ms ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-primary:hover {
+  background: #2563EB;
+  box-shadow: 0 0 16px var(--primary-glow);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 200ms ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.btn-ghost:hover {
+  background: var(--bg-input);
+  border-color: var(--border-emphasis);
+  color: var(--text-primary);
+}
+
+/* ─── Score Badge Glow Shadows ──────────────────────────────────────────────── */
+.score-danger  { box-shadow: 0 0 12px rgba(239,68,68,0.4); }
+.score-warning { box-shadow: 0 0 12px rgba(245,158,11,0.4); }
+.score-safe    { box-shadow: 0 0 12px rgba(16,185,129,0.4); }
+
+/* ─── Recharts Overrides ────────────────────────────────────────────────────── */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* ─── Skeleton Pulse ────────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-input) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

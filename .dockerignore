@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.git/
+.gitignore
+.vscode/
+.agent/
+frontend/node_modules/
+frontend/.vite/
+*.md
+*.csv
+alembic.zip
+tests/
+docs/
+architecture/

@@ -1,7 +1,7 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "https://excalidraw.com",
+  "source": "https://marketplace.visualstudio.com/items?itemName=pomdtr.excalidraw-editor",
   "elements": [
     {
       "id": "title-bg",
@@ -18,8 +18,20 @@
       "strokeStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": []
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 1680455705,
+      "index": "a0",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "title-text",
@@ -38,9 +50,26 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 377500151,
+      "index": "a1",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🛡️  Phishing Guard V2 — System Architecture",
+      "autoResize": true,
+      "lineHeight": 1.25
     },
-
     {
       "id": "client-box",
       "type": "rectangle",
@@ -56,8 +85,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["client-group"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "client-group"
+      ],
+      "version": 2,
+      "versionNonce": 911035641,
+      "index": "a2",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "client-text",
@@ -76,9 +119,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["client-group"]
+      "groupIds": [
+        "client-group"
+      ],
+      "version": 2,
+      "versionNonce": 431282967,
+      "index": "a3",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🖥️ Client\n(curl / Postman\n/ Frontend)",
+      "autoResize": true,
+      "lineHeight": 1.1904761904761905
     },
-
     {
       "id": "imap-box",
       "type": "rectangle",
@@ -94,8 +156,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["imap-group"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "imap-group"
+      ],
+      "version": 2,
+      "versionNonce": 753616345,
+      "index": "a4",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "imap-text",
@@ -114,9 +190,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["imap-group"]
+      "groupIds": [
+        "imap-group"
+      ],
+      "version": 2,
+      "versionNonce": 1589076023,
+      "index": "a5",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📧 IMAP Server\n(Gmail / any\nIMAP host)",
+      "autoResize": true,
+      "lineHeight": 1.1904761904761905
     },
-
     {
       "id": "vt-box",
       "type": "rectangle",
@@ -132,8 +227,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["vt-group"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "vt-group"
+      ],
+      "version": 2,
+      "versionNonce": 320283321,
+      "index": "a6",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "vt-text",
@@ -152,14 +261,33 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["vt-group"]
+      "groupIds": [
+        "vt-group"
+      ],
+      "version": 2,
+      "versionNonce": 661406039,
+      "index": "a7",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔍 VirusTotal\nAPI (optional,\nfree tier)",
+      "autoResize": true,
+      "lineHeight": 1.1904761904761905
     },
-
     {
       "id": "fastapi-bg",
       "type": "rectangle",
-      "x": 260,
-      "y": 80,
+      "x": 245.9798808176052,
+      "y": 89.41974407264877,
       "width": 620,
       "height": 600,
       "angle": 0,
@@ -170,14 +298,28 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["fastapi-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "fastapi-container"
+      ],
+      "version": 60,
+      "versionNonce": 1216755127,
+      "index": "a8",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248228102,
+      "link": null,
+      "locked": false
     },
     {
       "id": "fastapi-label",
       "type": "text",
-      "x": 380,
-      "y": 90,
+      "x": 365.9798808176052,
+      "y": 99.41974407264877,
       "width": 400,
       "height": 25,
       "text": "🐍 FastAPI Application (Python 3.12 · Uvicorn · Docker)",
@@ -190,9 +332,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["fastapi-container"]
+      "groupIds": [
+        "fastapi-container"
+      ],
+      "version": 60,
+      "versionNonce": 1808033495,
+      "index": "a9",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248228102,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🐍 FastAPI Application (Python 3.12 · Uvicorn · Docker)",
+      "autoResize": true,
+      "lineHeight": 1.5625
     },
-
     {
       "id": "api-layer-box",
       "type": "rectangle",
@@ -208,8 +369,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["api-layer"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "api-layer"
+      ],
+      "version": 2,
+      "versionNonce": 1077315705,
+      "index": "aA",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "api-layer-text",
@@ -228,9 +403,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["api-layer"]
+      "groupIds": [
+        "api-layer"
+      ],
+      "version": 2,
+      "versionNonce": 1789859735,
+      "index": "aB",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📡 API Layer (app/api/)\n/emails   /emails/fetch   /scans/{id}   /health   Swagger: /docs",
+      "autoResize": true,
+      "lineHeight": 1.7857142857142858
     },
-
     {
       "id": "services-box",
       "type": "rectangle",
@@ -246,8 +440,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["services-layer"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "services-layer"
+      ],
+      "version": 2,
+      "versionNonce": 757141849,
+      "index": "aC",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "services-text",
@@ -266,9 +474,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["services-layer"]
+      "groupIds": [
+        "services-layer"
+      ],
+      "version": 2,
+      "versionNonce": 2117471415,
+      "index": "aD",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "⚙️ Services (app/services/)\n• email_service.py\n  (IMAP fetch + dedup + store)\n• scan_service.py\n  (Pipeline orchestrator)",
+      "autoResize": true,
+      "lineHeight": 1.0769230769230769
     },
-
     {
       "id": "config-box",
       "type": "rectangle",
@@ -284,8 +511,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["config-layer"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "config-layer"
+      ],
+      "version": 2,
+      "versionNonce": 830963257,
+      "index": "aE",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "config-text",
@@ -304,9 +545,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["config-layer"]
+      "groupIds": [
+        "config-layer"
+      ],
+      "version": 2,
+      "versionNonce": 727801303,
+      "index": "aF",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔧 Config & DI (app/)\n• config.py — pydantic-settings\n  (env vars, .env file)\n• dependencies.py\n  (SQLAlchemy engine, get_db())",
+      "autoResize": true,
+      "lineHeight": 1.0769230769230769
     },
-
     {
       "id": "engines-bg",
       "type": "rectangle",
@@ -322,8 +582,22 @@
       "strokeStyle": "dashed",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["engines-layer"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "engines-layer"
+      ],
+      "version": 2,
+      "versionNonce": 1011699481,
+      "index": "aG",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "engines-label",
@@ -342,9 +616,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["engines-layer"]
+      "groupIds": [
+        "engines-layer"
+      ],
+      "version": 2,
+      "versionNonce": 1967491831,
+      "index": "aH",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔬 Analysis Engines (app/engines/)",
+      "autoResize": true,
+      "lineHeight": 1.4285714285714286
     },
-
     {
       "id": "ai-engine-box",
       "type": "rectangle",
@@ -360,8 +653,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["ai-engine"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "ai-engine"
+      ],
+      "version": 2,
+      "versionNonce": 333841401,
+      "index": "aI",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "ai-engine-text",
@@ -380,9 +687,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["ai-engine"]
+      "groupIds": [
+        "ai-engine"
+      ],
+      "version": 2,
+      "versionNonce": 140973079,
+      "index": "aJ",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🤖 AI Engine\ntext_analyzer.py\n─────────────\nscikit-learn\nTF-IDF +\nLogistic\nRegression\n─────────────\nInput: email body\nOutput: 0–100\nphishing score",
+      "autoResize": true,
+      "lineHeight": 1.1538461538461537
     },
-
     {
       "id": "url-engine-box",
       "type": "rectangle",
@@ -398,8 +724,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["url-engine"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "url-engine"
+      ],
+      "version": 2,
+      "versionNonce": 1683299545,
+      "index": "aK",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "url-engine-text",
@@ -418,9 +758,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["url-engine"]
+      "groupIds": [
+        "url-engine"
+      ],
+      "version": 2,
+      "versionNonce": 213547319,
+      "index": "aL",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔗 URL Engine\nurl_analyzer.py\n─────────────\n10 heuristic\nchecks:\nHTTP, IP host,\nbrand spoof,\nshorteners...\n+VirusTotal API\n─────────────\nOutput: 0–100\nURL risk score",
+      "autoResize": true,
+      "lineHeight": 1.0576923076923077
     },
-
     {
       "id": "file-engine-box",
       "type": "rectangle",
@@ -436,8 +795,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["file-engine"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "file-engine"
+      ],
+      "version": 2,
+      "versionNonce": 221125049,
+      "index": "aM",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "file-engine-text",
@@ -456,9 +829,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["file-engine"]
+      "groupIds": [
+        "file-engine"
+      ],
+      "version": 2,
+      "versionNonce": 933509719,
+      "index": "aN",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📎 File Engine\nattachment_\nanalyzer.py\n─────────────\npefile (PE/EXE)\nPyPDF2 (PDF)\nolefile (DOC)\nYARA rules\nMIME detection\n─────────────\nOutput: 0–100\nfile risk score",
+      "autoResize": true,
+      "lineHeight": 1.0576923076923077
     },
-
     {
       "id": "scoring-box",
       "type": "rectangle",
@@ -474,8 +866,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["scoring"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "scoring"
+      ],
+      "version": 2,
+      "versionNonce": 798259865,
+      "index": "aO",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "scoring-text",
@@ -494,9 +900,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["scoring"]
+      "groupIds": [
+        "scoring"
+      ],
+      "version": 2,
+      "versionNonce": 502847351,
+      "index": "aP",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "⚡ Final Score = 1 − (1−P_ai)(1−P_url)(1−P_att) × 100  →  SAFE (<30) | SUSPICIOUS (30–70) | DANGEROUS (>70)",
+      "autoResize": true,
+      "lineHeight": 3.8461538461538463
     },
-
     {
       "id": "db-bg",
       "type": "rectangle",
@@ -512,8 +937,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 2084290425,
+      "index": "aQ",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "db-label",
@@ -532,9 +971,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1174196375,
+      "index": "aR",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🗄️ PostgreSQL 16 Database",
+      "autoResize": true,
+      "lineHeight": 1.6666666666666667
     },
-
     {
       "id": "table-emails",
       "type": "rectangle",
@@ -550,8 +1008,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1097295961,
+      "index": "aS",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-emails-text",
@@ -570,9 +1042,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 2036639159,
+      "index": "aT",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📋 emails\nid, message_id, sender,\nsubject, body_text,\nbody_html, fetched_at",
+      "autoResize": true,
+      "lineHeight": 1.4583333333333333
     },
-
     {
       "id": "table-attachments",
       "type": "rectangle",
@@ -588,8 +1079,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 954922297,
+      "index": "aU",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-attachments-text",
@@ -608,9 +1113,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1465177815,
+      "index": "aV",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📎 attachments\nemail_id, filename,\nsha256_hash,\nstorage_path",
+      "autoResize": true,
+      "lineHeight": 1.3541666666666667
     },
-
     {
       "id": "table-scans",
       "type": "rectangle",
@@ -626,8 +1150,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 371844633,
+      "index": "aW",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-scans-text",
@@ -646,9 +1184,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 643949559,
+      "index": "aX",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔬 scans\nemail_id, status,\nstarted_at, completed_at",
+      "autoResize": true,
+      "lineHeight": 1.6666666666666667
     },
-
     {
       "id": "table-verdicts",
       "type": "rectangle",
@@ -664,8 +1221,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1410841337,
+      "index": "aY",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-verdicts-text",
@@ -684,9 +1255,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1720732951,
+      "index": "aZ",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "⚖️ verdicts\nfinal_score, classification,\nai_score, url_score,\nattachment_score,\nbreakdown (JSON)",
+      "autoResize": true,
+      "lineHeight": 1.3333333333333333
     },
-
     {
       "id": "table-urlresults",
       "type": "rectangle",
@@ -702,8 +1292,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1127740377,
+      "index": "aa",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-urlresults-text",
@@ -722,9 +1326,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 592745015,
+      "index": "ab",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔗 url_results\nscan_id, original_url,\nheuristic_score, vt_score,\nfinal_score,\nheuristic_flags (JSON)",
+      "autoResize": true,
+      "lineHeight": 1.3333333333333333
     },
-
     {
       "id": "table-fetchstate",
       "type": "rectangle",
@@ -740,8 +1363,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["db-container"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 1469976761,
+      "index": "ac",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "table-fetchstate-text",
@@ -760,9 +1397,28 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["db-container"]
+      "groupIds": [
+        "db-container"
+      ],
+      "version": 2,
+      "versionNonce": 93533015,
+      "index": "ad",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "📌 fetch_state\nmailbox (UNIQUE),\nlast_uid (UID cursor)",
+      "autoResize": true,
+      "lineHeight": 1.5277777777777777
     },
-
     {
       "id": "alembic-box",
       "x": 940,
@@ -778,8 +1434,20 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": []
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 921538969,
+      "index": "ae",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "alembic-text",
@@ -798,9 +1466,26 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 631287927,
+      "index": "af",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "🔄 Alembic Migrations\n0001_initial → 0002_url_results",
+      "autoResize": true,
+      "lineHeight": 1.25
     },
-
     {
       "id": "arrow-client-api",
       "type": "arrow",
@@ -816,9 +1501,33 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "points": [[0,0],[58,0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          58,
+          0
+        ]
+      ],
       "startArrowhead": null,
-      "endArrowhead": "arrow"
+      "endArrowhead": "arrow",
+      "lastCommittedPoint": null,
+      "version": 2,
+      "versionNonce": 106559097,
+      "index": "ag",
+      "isDeleted": false,
+      "seed": 1,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "startBinding": null,
+      "endBinding": null
     },
     {
       "id": "arrow-api-client-label",
@@ -836,9 +1545,27 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 490834327,
+      "index": "ah",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "HTTP",
+      "autoResize": true,
+      "lineHeight": 1.3636363636363635
     },
-
     {
       "id": "arrow-imap-service",
       "type": "arrow",
@@ -854,9 +1581,33 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "points": [[0,0],[120,0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          120,
+          0
+        ]
+      ],
       "startArrowhead": null,
-      "endArrowhead": "arrow"
+      "endArrowhead": "arrow",
+      "lastCommittedPoint": null,
+      "version": 2,
+      "versionNonce": 2024193881,
+      "index": "ai",
+      "isDeleted": false,
+      "seed": 1,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "startBinding": null,
+      "endBinding": null
     },
     {
       "id": "arrow-imap-label",
@@ -874,16 +1625,34 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 1504329399,
+      "index": "aj",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "IMAP SSL:993",
+      "autoResize": true,
+      "lineHeight": 1.3636363636363635
     },
-
     {
       "id": "arrow-vt-engine",
       "type": "arrow",
       "x": 200,
       "y": 430,
       "width": 280,
-      "height": -10,
+      "height": 10,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -892,9 +1661,33 @@
       "strokeStyle": "dashed",
       "roughness": 1,
       "opacity": 100,
-      "points": [[0,0],[280,-10]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          280,
+          -10
+        ]
+      ],
       "startArrowhead": null,
-      "endArrowhead": "arrow"
+      "endArrowhead": "arrow",
+      "lastCommittedPoint": null,
+      "version": 2,
+      "versionNonce": 472345657,
+      "index": "ak",
+      "isDeleted": false,
+      "seed": 1,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "startBinding": null,
+      "endBinding": null
     },
     {
       "id": "arrow-vt-label",
@@ -912,9 +1705,27 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 763318231,
+      "index": "al",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "HTTPS (optional)",
+      "autoResize": true,
+      "lineHeight": 1.3636363636363635
     },
-
     {
       "id": "arrow-app-db",
       "type": "arrow",
@@ -930,9 +1741,33 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "points": [[0,0],[60,0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
       "startArrowhead": null,
-      "endArrowhead": "arrow"
+      "endArrowhead": "arrow",
+      "lastCommittedPoint": null,
+      "version": 2,
+      "versionNonce": 1757379865,
+      "index": "am",
+      "isDeleted": false,
+      "seed": 1,
+      "groupIds": [],
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "startBinding": null,
+      "endBinding": null
     },
     {
       "id": "arrow-app-db-label",
@@ -950,9 +1785,27 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": []
+      "groupIds": [],
+      "version": 2,
+      "versionNonce": 584400119,
+      "index": "an",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "verticalAlign": "top",
+      "containerId": null,
+      "originalText": "SQLAlchemy",
+      "autoResize": true,
+      "lineHeight": 1.5
     },
-
     {
       "id": "legend-box",
       "type": "rectangle",
@@ -968,8 +1821,22 @@
       "strokeStyle": "solid",
       "roughness": 1,
       "opacity": 100,
-      "roundness": { "type": 3 },
-      "groupIds": ["legend"]
+      "roundness": {
+        "type": 3
+      },
+      "groupIds": [
+        "legend"
+      ],
+      "version": 2,
+      "versionNonce": 232944121,
+      "index": "ao",
+      "isDeleted": false,
+      "seed": 1,
+      "frameId": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false
     },
     {
       "id": "legend-text",
@@ -988,11 +1855,34 @@
       "fillStyle": "solid",
       "roughness": 0,
       "opacity": 100,
-      "groupIds": ["legend"]
+      "groupIds": [
+        "legend"
+      ],
+      "version": 2,
+      "versionNonce": 221283863,
+      "index": "ap",
+      "isDeleted": false,
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "angle": 0,
+      "seed": 1,
+      "frameId": null,
+      "roundness": null,
+      "boundElements": [],
+      "updated": 1776248218859,
+      "link": null,
+      "locked": false,
+      "containerId": null,
+      "originalText": "Stack: FastAPI · SQLAlchemy 2.0 · Alembic · PostgreSQL 16 · scikit-learn · httpx · BeautifulSoup4 · pefile · PyPDF2 · olefile · yara-python\nNo Redis, No Celery, No API key auth — simplified for this semester",
+      "autoResize": true,
+      "lineHeight": 1.6666666666666667
     }
   ],
   "appState": {
-    "gridSize": null,
+    "gridSize": 20,
+    "gridStep": 5,
+    "gridModeEnabled": false,
     "viewBackgroundColor": "#ffffff"
-  }
+  },
+  "files": {}
 }
