@@ -124,18 +124,19 @@ class ScanService:
                     },
                     "url": {
                         "score": url_score,
-                        "total_urls": url_result.total_urls,
-                        "analyzed_urls": url_result.analyzed_urls,
-                        "vt_checked_urls": url_result.vt_checked_urls,
-                        "high_risk_urls": url_result.high_risk_urls,
+                        "total_urls": url_result.total_urls if url_result else 0,
+                        "analyzed_urls": url_result.analyzed_urls if url_result else 0,
+                        "vt_checked_urls": url_result.vt_checked_urls if url_result else 0,
+                        "high_risk_urls": url_result.high_risk_urls if url_result else [],
                         "per_url": [
                             {
                                 "url": u.original_url,
                                 "score": u.final_score,
+                                "heuristic_score": u.heuristic_score,
                                 "vt_malicious": u.vt_malicious,
-                                "top_flags": u.heuristic_flags[:3] if u.heuristic_flags else [],
+                                "top_flags": u.heuristic_flags[:5] if u.heuristic_flags else [],
                             }
-                            for u in url_result.per_url_results
+                            for u in (url_result.per_url_results if url_result else [])
                         ],
                     },
                     "attachment": {
@@ -162,11 +163,13 @@ class ScanService:
             return scan
 
         except Exception as e:
+            import traceback
             scan.status = ScanStatus.ERROR.value
             scan.completed_at = datetime.utcnow()
             self.db.commit()
-            logger.error(f"Scan {scan.id} failed: {e}")
+            logger.error(f"Scan {scan.id} failed: {type(e).__name__}: {e}\n{traceback.format_exc()}")
             raise
+
 
     def _compute_final_score(
         self, ai_score: float, url_score: float, attachment_score: float

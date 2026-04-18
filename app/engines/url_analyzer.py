@@ -1,19 +1,17 @@
 import base64
-import json
 import logging
 import math
-import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse, unquote
 
 import httpx
 from bs4 import BeautifulSoup
 
 from app.config import get_settings
-from app.cache import get_redis
+# Redis caching removed — planned for Semester 2
 
 logger = logging.getLogger(__name__)
 
@@ -251,23 +249,12 @@ class UrlAnalyzer:
         res.heuristic_score = min(score, 100.0)
         return res
 
-    # ── STAGE 3: VirusTotal Lookup ────────────────────────────────────────――
-    
+    # ── STAGE 3: VirusTotal Lookup ──────────────────────────────────────────────────—
+    # Note: Redis caching removed for Semester 1. Direct VT HTTP calls each time.
+    # Caching will be re-added in Semester 2 with Redis.
+
     def _check_virustotal(self, result: UrlAnalysisResult) -> None:
         url_id = base64.urlsafe_b64encode(result.normalized_url.encode()).decode().rstrip("=")
-        cache_key = f"vt:url:{url_id}"
-        
-        # Check cache
-        r = get_redis()
-        if r:
-            cached = r.get(cache_key)
-            if cached:
-                try:
-                    data = json.loads(cached)
-                    self._apply_vt_stats(result, data)
-                    return
-                except Exception:
-                    pass
 
         api_key = self._vt_keys[self._vt_key_index]
         self._vt_key_index = (self._vt_key_index + 1) % len(self._vt_keys)
@@ -281,9 +268,6 @@ class UrlAnalyzer:
                 if resp.status_code == 200:
                     data = resp.json()["data"]["attributes"]["last_analysis_stats"]
                     self._apply_vt_stats(result, data)
-                    
-                    if r:
-                        r.setex(cache_key, 86400, json.dumps(data))
                         
                 elif resp.status_code == 404:
                     result.vt_error = "Submitted to VT — not yet analyzed"

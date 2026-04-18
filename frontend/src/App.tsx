@@ -5,6 +5,8 @@ import { EmailInbox } from './pages/EmailInbox';
 import { ScanResults } from './pages/ScanResults';
 import { ScanDetail } from './pages/ScanDetail';
 import { HealthPage } from './pages/HealthPage';
+import { ActiveScans } from './pages/ActiveScans';
+import { UrlAnalysis } from './pages/UrlAnalysis';
 
 // ─── Placeholder pages for nav items without full pages ──────────────────────
 function PlaceholderPage({ title }: { title: string }) {
@@ -24,10 +26,10 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="emails" element={<EmailInbox />} />
-          <Route path="active-scans" element={<PlaceholderPage title="Active Scans" />} />
+          <Route path="active-scans" element={<ActiveScans />} />
           <Route path="scans" element={<ScanResults />} />
           <Route path="scans/:id" element={<ScanDetail />} />
-          <Route path="url-analysis" element={<PlaceholderPage title="URL Analysis" />} />
+          <Route path="url-analysis" element={<UrlAnalysis />} />
           <Route path="attachments" element={<PlaceholderPage title="Attachments" />} />
           <Route path="health" element={<HealthPage />} />
           <Route path="settings" element={<PlaceholderPage title="Settings" />} />

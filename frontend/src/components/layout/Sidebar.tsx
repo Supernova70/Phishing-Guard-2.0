@@ -12,6 +12,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { StatusDot } from '../ui/Badge';
+import { useSystemHealth } from '../../hooks/useSystemHealth';
 
 interface NavItem {
   to: string;
@@ -117,6 +118,7 @@ interface SidebarProps {
 
 export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online' }: SidebarProps) {
   const location = useLocation();
+  const { health } = useSystemHealth();
 
   const monitorItems: NavItem[] = [
     { to: '/', icon: <LayoutDashboard size={16} />, label: 'Dashboard' },
@@ -133,6 +135,25 @@ export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online
   const systemItems: NavItem[] = [
     { to: '/settings', icon: <Settings size={16} />, label: 'Settings' },
     { to: '/health', icon: <Activity size={16} />, label: 'API Health', badgeType: 'dot', dotStatus: apiStatus },
+  ];
+
+  // Derive component statuses from health hook
+  const dbStatus = health?.components?.database?.status === 'connected' ? 'online' : health ? 'offline' : 'warning' as const;
+  const mlStatus = health?.components?.ml_model?.status === 'loaded' ? 'online' : 'warning' as const;
+
+  const statusItems = [
+    {
+      label: 'DB',
+      dot: dbStatus,
+      text: health?.components?.database?.status === 'connected' ? 'Connected' : health ? 'Error' : 'Unknown',
+      textColor: health?.components?.database?.status === 'connected' ? 'var(--text-safe)' : 'var(--text-muted)',
+    },
+    {
+      label: 'ML Model',
+      dot: mlStatus,
+      text: health?.components?.ml_model?.status === 'loaded' ? 'Loaded' : health ? 'Not Loaded' : 'Unknown',
+      textColor: health?.components?.ml_model?.status === 'loaded' ? 'var(--text-safe)' : 'var(--text-muted)',
+    },
   ];
 
   return (
@@ -189,7 +210,7 @@ export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online
         <NavSection title="System" items={systemItems} currentPath={location.pathname} />
       </nav>
 
-      {/* System Status Panel */}
+      {/* System Status Panel — DB and ML Model only (Redis removed) */}
       <div style={{
         padding: '12px 16px',
         borderTop: '1px solid var(--border-subtle)',
@@ -198,16 +219,12 @@ export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online
         <p style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase' }}>
           System Status
         </p>
-        {[
-          { label: 'DB', status: apiStatus === 'online' ? 'Connected' : 'Unknown' },
-          { label: 'Redis', status: apiStatus === 'online' ? 'Connected' : 'Unknown' },
-          { label: 'ML Model', status: apiStatus === 'online' ? 'Loaded' : 'Unknown' },
-        ].map((item) => (
+        {statusItems.map((item) => (
           <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.label}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <StatusDot status={apiStatus === 'online' ? 'online' : 'warning'} pulse={false} />
-              <span style={{ fontSize: '0.7rem', color: apiStatus === 'online' ? 'var(--text-safe)' : 'var(--text-muted)' }}>{item.status}</span>
+              <StatusDot status={item.dot as 'online' | 'offline' | 'warning'} pulse={false} />
+              <span style={{ fontSize: '0.7rem', color: item.textColor }}>{item.text}</span>
             </div>
           </div>
         ))}
