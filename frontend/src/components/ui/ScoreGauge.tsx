@@ -1,90 +1,101 @@
-import { useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-
 interface ScoreGaugeProps {
   score: number;  // 0–100
   size?: number;
 }
 
-function getColor(score: number) {
-  if (score >= 70) return '#EF4444';
-  if (score >= 30) return '#F59E0B';
-  return '#10B981';
-}
-
-export function ScoreGauge({ score, size = 120 }: ScoreGaugeProps) {
-  const color = getColor(score);
-  const strokeWidth = size * 0.08;
-  const radius = (size - strokeWidth * 2) / 2;
+const ScoreGauge = ({ score, size = 160 }: ScoreGaugeProps) => {
   const cx = size / 2;
   const cy = size / 2;
+  const radius = size / 2 - 16; // 16px padding from edge
 
-  // Semicircle: starts at 180deg (left), sweeps 180deg (right)
-  const startAngle = Math.PI;
-  const endAngle = 0;
+  // Circumference of the full circle
+  const circumference = 2 * Math.PI * radius;
+  // Half = semicircle arc length
+  const halfCircum = circumference / 2;
 
-  // Full arc path (background)
-  const startX = cx + radius * Math.cos(startAngle);
-  const startY = cy + radius * Math.sin(startAngle);
-  const endX = cx + radius * Math.cos(endAngle);
-  const endY = cy + radius * Math.sin(endAngle);
+  // How much of the semicircle is filled based on score
+  const filled = (score / 100) * halfCircum;
 
-  const arcPath = `M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`;
-
-  // Score arc: 0 maps to startAngle, 100 maps to endAngle
-  const scoreRatio = Math.min(score, 100) / 100;
-  const scoreAngle = startAngle + scoreRatio * (endAngle - startAngle);
-  // When going left→right, angle decreases from Math.PI to 0
-  const actualAngle = Math.PI - scoreRatio * Math.PI;
-  const scoreEndX = cx + radius * Math.cos(actualAngle);
-  const scoreEndY = cy + radius * Math.sin(actualAngle);
-
-  const scorePath =
-    scoreRatio === 0
-      ? ''
-      : `M ${startX} ${startY} A ${radius} ${radius} 0 ${scoreRatio > 0.5 ? 1 : 0} 1 ${scoreEndX} ${scoreEndY}`;
+  // Color based on score
+  const color = score >= 70 ? '#EF4444' : score >= 30 ? '#F59E0B' : '#10B981';
+  const label = score >= 70 ? 'HIGH RISK' : score >= 30 ? 'MEDIUM RISK' : 'CLEAN';
+  const labelColor = score >= 70 ? '#FCA5A5' : score >= 30 ? '#FCD34D' : '#6EE7B7';
+  const labelBg = score >= 70 ? '#EF444420' : score >= 30 ? '#F59E0B20' : '#10B98120';
 
   return (
-    <div style={{ position: 'relative', width: size, height: size * 0.6 }}>
-      <svg width={size} height={size * 0.65} style={{ overflow: 'visible' }}>
-        {/* Background arc */}
-        <path
-          d={arcPath}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* SVG height = size*0.6 clips at the equator, showing only top semicircle */}
+      <svg
+        width={size}
+        height={size * 0.6}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ overflow: 'visible' }}
+      >
+        {/* Background track — full semicircle in muted color */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
           fill="none"
-          stroke="var(--bg-input)"
-          strokeWidth={strokeWidth}
+          stroke="#1E2736"
+          strokeWidth={12}
+          strokeDasharray={`${halfCircum} ${circumference - halfCircum}`}
+          strokeDashoffset={0}
           strokeLinecap="round"
+          transform={`rotate(180 ${cx} ${cy})`}
         />
-        {/* Score arc */}
-        {scorePath && (
-          <motion.path
-            d={scorePath}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
-            style={{
-              filter: `drop-shadow(0 0 6px ${color}80)`,
-            }}
-          />
-        )}
-        {/* Score text */}
+
+        {/* Filled arc — proportional to score */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={12}
+          strokeDasharray={`${filled} ${circumference - filled}`}
+          strokeDashoffset={0}
+          strokeLinecap="round"
+          transform={`rotate(180 ${cx} ${cy})`}
+          style={{
+            transition: 'stroke-dasharray 1s ease-out',
+            filter: `drop-shadow(0 0 6px ${color}80)`,
+          }}
+        />
+
+        {/* Score number in center */}
         <text
           x={cx}
-          y={cy + 4}
+          y={cy + 8}
           textAnchor="middle"
           dominantBaseline="middle"
-          fontSize={size * 0.2}
+          fill={color}
+          fontSize={size * 0.22}
           fontWeight="700"
           fontFamily="'JetBrains Mono', monospace"
-          fill={color}
         >
-          {score.toFixed(0)}
+          {Math.round(score)}
         </text>
       </svg>
+
+      {/* Risk label below gauge */}
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: '600',
+          letterSpacing: '0.08em',
+          color: labelColor,
+          backgroundColor: labelBg,
+          padding: '2px 10px',
+          borderRadius: '4px',
+          marginTop: '4px',
+        }}
+      >
+        {label}
+      </span>
     </div>
   );
-}
+};
+
+export default ScoreGauge;
+export { ScoreGauge };

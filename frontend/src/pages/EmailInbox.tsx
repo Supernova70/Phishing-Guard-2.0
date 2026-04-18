@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -8,14 +9,12 @@ import {
   ScanSearch,
   CheckCircle,
   XCircle,
-  ChevronRight,
   RefreshCw,
   FileText,
   Code,
   File,
 } from 'lucide-react';
-import { getEmails, getEmail, fetchEmails, runScan } from '../api/client';
-import { usePollScan } from '../hooks/usePollScan';
+import { getEmails, getEmail, fetchEmails } from '../api/client';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { LoadingDots } from '../components/ui/LoadingDots';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -106,60 +105,155 @@ function AttachmentCard({ att }: { att: Attachment }) {
 type ScanState = 'idle' | 'scanning' | 'complete' | 'failed';
 
 function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: number; alreadyScanned: boolean; onComplete: () => void }) {
+  const navigate = useNavigate();
   const [state, setState] = useState<ScanState>(alreadyScanned ? 'complete' : 'idle');
-  const { scan, polling, error, startPolling } = usePollScan();
+  const [scanError, setScanError] = useState<string>('');
+  const [scanId, setScanId] = useState<number | null>(null);
+  const [verdict, setVerdict] = useState<{ final_score: number; classification: string; ai_score?: number; url_score?: number; attachment_score?: number } | null>(null);
 
   useEffect(() => {
     if (alreadyScanned) setState('complete');
   }, [alreadyScanned, emailId]);
 
-  useEffect(() => {
-    if (scan?.status === 'complete') { setState('complete'); onComplete(); }
-    if (scan?.status === 'error' || error) setState('failed');
-  }, [scan, error]);
-
   const handleScan = async () => {
     if (state !== 'idle' && state !== 'failed') return;
     setState('scanning');
+    setScanError('');
+
     try {
-      const result = await runScan(emailId);
-      startPolling(result.id);
+      const response = await fetch(`http://127.0.0.1:8080/scans/${emailId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Backend returned 500 with error details
+        const detail = data?.detail ?? data;
+        const errorMsg = detail?.message ?? detail?.error ?? (typeof detail === 'string' ? detail : 'Unknown error');
+        const errorType = detail?.type ?? 'Error';
+        setScanError(`${errorType}: ${errorMsg}`);
+        setState('failed');
+        return;
+      }
+
+      // Synchronous success — response has {status: 'complete', scan_id, email_id, verdict}
+      if (data.status === 'complete' || data.status === 'success') {
+        setScanId(data.scan_id ?? data.id ?? null);
+        setVerdict(data.verdict ?? null);
+        setState('complete');
+        onComplete();
+      } else {
+        setScanError('Unexpected response from server');
+        setState('failed');
+      }
     } catch {
+      setScanError('Cannot reach backend — is Docker running?');
       setState('failed');
     }
   };
 
-  const configs = {
-    idle: { label: 'Run Scan', icon: <ScanSearch size={14} />, bg: 'var(--primary)', color: 'white', border: 'var(--primary)' },
-    scanning: { label: 'Scanning', icon: <LoadingDots />, bg: 'var(--bg-input)', color: 'var(--primary)', border: 'var(--primary)' },
-    complete: { label: 'Completed', icon: <CheckCircle size={14} />, bg: 'var(--safe-subtle)', color: 'var(--text-safe)', border: 'var(--safe)' },
-    failed: { label: 'Failed — Retry', icon: <XCircle size={14} />, bg: 'var(--danger-subtle)', color: 'var(--text-danger)', border: 'var(--danger)' },
+  const configs: Record<ScanState, { label: string; icon: React.ReactNode; bg: string; color: string; border: string }> = {
+    idle:     { label: 'Run Scan',       icon: <ScanSearch size={14} />,  bg: 'var(--primary)',       color: 'white',              border: 'var(--primary)' },
+    scanning: { label: 'Scanning…',      icon: <LoadingDots />,             bg: 'var(--bg-input)',      color: 'var(--primary)',       border: 'var(--primary)' },
+    complete: { label: 'Scan Complete',  icon: <CheckCircle size={14} />,  bg: 'var(--safe-subtle)',   color: 'var(--text-safe)',     border: 'var(--safe)' },
+    failed:   { label: 'Failed — Retry', icon: <XCircle size={14} />,      bg: 'var(--danger-subtle)', color: 'var(--text-danger)',   border: 'var(--danger)' },
   };
   const cfg = configs[state];
 
   return (
-    <motion.button
-      layout
-      onClick={handleScan}
-      disabled={state === 'scanning' || state === 'complete'}
-      style={{
-        background: cfg.bg,
-        color: cfg.color,
-        border: `1px solid ${cfg.border}`,
-        borderRadius: 6,
-        padding: '8px 18px',
-        fontSize: '0.875rem',
-        fontWeight: 600,
-        cursor: state === 'scanning' || state === 'complete' ? 'not-allowed' : 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        transition: 'all 250ms ease',
-      }}
-    >
-      {cfg.icon}
-      {cfg.label}
-    </motion.button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <motion.button
+        layout
+        onClick={handleScan}
+        disabled={state === 'scanning' || state === 'complete'}
+        style={{
+          background: cfg.bg,
+          color: cfg.color,
+          border: `1px solid ${cfg.border}`,
+          borderRadius: 6,
+          padding: '8px 18px',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          cursor: state === 'scanning' || state === 'complete' ? 'not-allowed' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          transition: 'all 250ms ease',
+          width: 'fit-content',
+        }}
+      >
+        {cfg.icon}
+        {cfg.label}
+      </motion.button>
+
+      {/* Scanning indicator */}
+      {state === 'scanning' && (
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          Analyzing email content…
+        </p>
+      )}
+
+      {/* Error message */}
+      {state === 'failed' && scanError && (
+        <div style={{
+          border: '1px solid rgba(239,68,68,0.4)',
+          background: 'rgba(239,68,68,0.06)',
+          borderRadius: 6,
+          padding: '8px 12px',
+          fontSize: '0.78rem',
+          color: '#FCA5A5',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 8,
+        }}>
+          <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>⚠ Scan error: {scanError}</span>
+        </div>
+      )}
+
+      {/* Inline verdict after successful scan */}
+      {state === 'complete' && verdict && scanId && (
+        <div style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 6,
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="font-mono" style={{
+              fontSize: '1rem',
+              fontWeight: 700,
+              color: verdict.final_score >= 70 ? '#EF4444' : verdict.final_score >= 30 ? '#F59E0B' : '#10B981',
+            }}>
+              {verdict.final_score.toFixed(0)}
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              padding: '2px 8px',
+              borderRadius: 3,
+              background: verdict.classification === 'dangerous' ? '#EF444420' : verdict.classification === 'suspicious' ? '#F59E0B20' : '#10B98120',
+              color: verdict.classification === 'dangerous' ? '#FCA5A5' : verdict.classification === 'suspicious' ? '#FCD34D' : '#6EE7B7',
+              textTransform: 'uppercase' as const,
+              letterSpacing: '0.06em',
+            }}>
+              {verdict.classification}
+            </span>
+          </div>
+          <button
+            onClick={() => navigate(`/scans/${scanId}`)}
+            style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: 0, textAlign: 'left' as const }}
+          >
+            View Full Report →
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

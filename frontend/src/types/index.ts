@@ -107,12 +107,13 @@ export interface ScanBreakdown {
 // ─── Health Types ────────────────────────────────────────────────────────────
 
 export interface HealthStatus {
-  status: string;
-  database: string;
-  redis?: string;
-  ml_model?: string;
-  version?: string;
-  timestamp?: string;
+  status: 'ok' | 'degraded';
+  version: string;
+  response_time_ms: number;
+  components: {
+    database: { status: 'connected' | 'error'; detail: string };
+    ml_model: { status: 'loaded' | 'not_loaded'; detail: string };
+  };
 }
 
 // ─── Fetch Response ───────────────────────────────────────────────────────────

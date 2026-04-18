@@ -38,3 +38,13 @@ services:
 volumes:
   pg_data:
   uploads_data:
+
+# Redis service — planned for Semester 2
+# Will be used for VT caching and Celery async workers
+# Uncomment and add when implementing async scan pipeline:
+#
+# redis:
+#   image: redis:7-alpine
+#   container_name: phishing-guard-redis
+#   ports:
+#     - "6379:6379"

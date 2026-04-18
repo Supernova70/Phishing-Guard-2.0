@@ -1,37 +1,38 @@
 """Scan API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+import traceback
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.dependencies import get_db
 from app.models.email import Email
 from app.models.scan import Scan, ScanStatus
-from app.schemas.scan import ScanOut, ScanTriggerResponse, ScanListResponse
+from app.schemas.scan import ScanOut, ScanListResponse
 from app.services.scan_service import ScanService
-from app.dependencies import SessionLocal
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
 
-@router.post("/{email_id}", status_code=202, response_model=ScanTriggerResponse)
+@router.post("/{email_id}", status_code=200)
 async def trigger_scan(
     email_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Trigger a full analysis scan on an email.
 
-    Runs the ML text analyzer (and future engines) on the email body,
-    then computes a verdict with risk classification.
+    Runs all analysis engines synchronously and returns the complete verdict.
+    Returns {status: "complete", scan_id, email_id, verdict} on success.
     """
     # Verify email exists
     email = db.query(Email).filter(Email.id == email_id).first()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    # Create scan in PENDING state immediately
+    # Create scan record
     scan = Scan(
         email_id=email_id,
         status=ScanStatus.PENDING.value,
@@ -40,28 +41,33 @@ async def trigger_scan(
     db.add(scan)
     db.commit()
     db.refresh(scan)
-    
-    # Dispatch to background (non-blocking)
-    background_tasks.add_task(_run_scan_background, scan.id)
-    
-    return ScanTriggerResponse(
-        status="pending",
-        scan_id=scan.id,
-        email_id=email_id,
-        verdict=None,
-    )
 
-def _run_scan_background(scan_id: int):
-    """Executes a scan in a new DB session for background task."""
-    db = SessionLocal()
+    # Run scan synchronously
     try:
         service = ScanService(db)
-        service.run_scan_by_id(scan_id)
+        scan = service.run_scan_by_id(scan.id)
+
+        scan_data = scan.to_dict()
+        return {
+            "status": "complete",
+            "scan_id": scan.id,
+            "email_id": email_id,
+            "verdict": scan_data.get("verdict"),
+        }
+
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Background scan {scan_id} failed: {e}")
-    finally:
-        db.close()
+        logger.error(
+            f"Scan failed for email {email_id}: {traceback.format_exc()}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "error": "Scan failed",
+                "message": str(e),
+                "type": type(e).__name__,
+            },
+        )
 
 
 @router.get("", response_model=ScanListResponse)
@@ -76,10 +82,10 @@ async def list_scans(
 ):
     """List all scans with pagination."""
     query = db.query(Scan)
-    
+
     if email_id is not None:
         query = query.filter(Scan.email_id == email_id)
-        
+
     if classification or score_min is not None or score_max is not None:
         from app.models.scan import Verdict
         query = query.join(Verdict)
@@ -89,7 +95,7 @@ async def list_scans(
             query = query.filter(Verdict.final_score >= score_min)
         if score_max is not None:
             query = query.filter(Verdict.final_score <= score_max)
-            
+
     total = query.count()
     scans = (
         query

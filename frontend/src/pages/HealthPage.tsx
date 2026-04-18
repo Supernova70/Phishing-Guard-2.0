@@ -1,9 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Database, Cpu, Server, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
-import { getHealth } from '../api/client';
+import { Activity, Database, Server, RefreshCw, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import type { HealthStatus } from '../types';
+import { useSystemHealth, type HealthResponse } from '../hooks/useSystemHealth';
 
 interface HealthSnapshot {
   time: number;
@@ -16,13 +15,17 @@ interface ServiceCardProps {
   icon: React.ReactNode;
   status: string;
   detail?: string;
+  variant?: 'healthy' | 'error' | 'warning' | 'unknown';
 }
 
-function ServiceCard({ name, icon, status, detail }: ServiceCardProps) {
-  const isOk = status === 'healthy' || status === 'connected' || status === 'loaded' || status === 'ok' || status === 'operational';
-  const color = isOk ? 'var(--safe)' : 'var(--danger)';
-  const bg = isOk ? 'var(--safe-subtle)' : 'var(--danger-subtle)';
-  const border = isOk ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+function ServiceCard({ name, icon, status, detail, variant = 'unknown' }: ServiceCardProps) {
+  const colors = {
+    healthy: { text: '#6EE7B7', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)' },
+    error:   { text: '#FCA5A5', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)' },
+    warning: { text: '#FCD34D', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.25)' },
+    unknown: { text: '#94A3B8', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)' },
+  };
+  const c = colors[variant];
 
   return (
     <motion.div
@@ -46,11 +49,11 @@ function ServiceCard({ name, icon, status, detail }: ServiceCardProps) {
         <span style={{
           fontSize: '0.7rem',
           fontWeight: 700,
-          textTransform: 'uppercase',
+          textTransform: 'uppercase' as const,
           letterSpacing: '0.06em',
-          color,
-          background: bg,
-          border: `1px solid ${border}`,
+          color: c.text,
+          background: c.bg,
+          border: `1px solid ${c.border}`,
           padding: '3px 10px',
           borderRadius: 4,
         }}>
@@ -58,52 +61,63 @@ function ServiceCard({ name, icon, status, detail }: ServiceCardProps) {
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {isOk
-          ? <CheckCircle size={14} style={{ color: 'var(--safe)' }} />
-          : <AlertCircle size={14} style={{ color: 'var(--danger)' }} />
+        {variant === 'healthy'
+          ? <CheckCircle size={14} style={{ color: '#10B981' }} />
+          : variant === 'error'
+          ? <AlertCircle size={14} style={{ color: '#EF4444' }} />
+          : <AlertCircle size={14} style={{ color: '#94A3B8' }} />
         }
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{detail ?? (isOk ? 'Operating normally' : 'Check required')}</span>
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+          {detail ?? 'No detail available'}
+        </span>
       </div>
     </motion.div>
   );
 }
 
 export function HealthPage() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const { health, loading: hookLoading } = useSystemHealth();
   const [history, setHistory] = useState<HealthSnapshot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [latency, setLatency] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [manualLoading, setManualLoading] = useState(false);
 
-  const fetchHealth = useCallback(async () => {
+  const fetchAndTrack = useCallback(async () => {
     const t0 = performance.now();
     try {
-      const data = await getHealth();
-      const latency = Math.round(performance.now() - t0);
-      setHealth(data);
-      setHistory((prev) => {
-        const entry: HealthSnapshot = { time: Date.now(), latency, status: true };
-        return [...prev.slice(-19), entry];
-      });
+      await fetch('http://127.0.0.1:8080/health');
+      const ms = Math.round(performance.now() - t0);
+      setLatency(ms);
+      setHistory((prev) => [...prev.slice(-19), { time: Date.now(), latency: ms, status: true }]);
     } catch {
-      setHistory((prev) => {
-        const entry: HealthSnapshot = { time: Date.now(), latency: 0, status: false };
-        return [...prev.slice(-19), entry];
-      });
-      setHealth(null);
+      setHistory((prev) => [...prev.slice(-19), { time: Date.now(), latency: 0, status: false }]);
     } finally {
-      setLoading(false);
       setLastUpdated(new Date());
     }
   }, []);
 
   useEffect(() => {
-    fetchHealth();
-    const id = setInterval(fetchHealth, 10000);
+    fetchAndTrack();
+    const id = setInterval(fetchAndTrack, 10000);
     return () => clearInterval(id);
-  }, [fetchHealth]);
+  }, [fetchAndTrack]);
 
-  const allOk = health && (health.status === 'healthy' || health.status === 'ok');
-  const latestLatency = history.length > 0 ? history[history.length - 1].latency : 0;
+  const handleRefresh = async () => {
+    setManualLoading(true);
+    await fetchAndTrack();
+    setManualLoading(false);
+  };
+
+  const allOk = health?.status === 'ok';
+  const dbStatus = health?.components?.database?.status;
+  const mlStatus = health?.components?.ml_model?.status;
+
+  // Determine failing components for degraded banner
+  const failingComponents: string[] = [];
+  if (health?.status === 'degraded') {
+    if (dbStatus === 'error') failingComponents.push('Database');
+    if (mlStatus === 'not_loaded') failingComponents.push('ML Model');
+  }
 
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -112,8 +126,8 @@ export function HealthPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         style={{
-          background: allOk ? 'var(--safe-subtle)' : 'var(--danger-subtle)',
-          border: `1px solid ${allOk ? 'var(--safe)' : 'var(--danger)'}`,
+          background: allOk ? 'rgba(16,185,129,0.08)' : health ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
+          border: `1px solid ${allOk ? '#10B981' : health ? '#F59E0B' : '#EF4444'}`,
           borderRadius: 8,
           padding: '28px 32px',
           display: 'flex',
@@ -123,58 +137,85 @@ export function HealthPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {allOk
-            ? <CheckCircle size={36} style={{ color: 'var(--safe)' }} />
-            : <AlertCircle size={36} style={{ color: 'var(--danger)' }} />
+            ? <CheckCircle size={36} style={{ color: '#10B981' }} />
+            : <AlertTriangle size={36} style={{ color: health ? '#F59E0B' : '#EF4444' }} />
           }
           <div>
-            <p style={{ fontSize: '1.5rem', fontWeight: 900, color: allOk ? 'var(--safe)' : 'var(--danger)', textTransform: 'uppercase', letterSpacing: '-0.01em' }}>
-              {loading ? 'Checking...' : allOk ? 'All Systems Operational' : 'System Degraded'}
+            <p style={{
+              fontSize: '1.5rem',
+              fontWeight: 900,
+              color: allOk ? '#10B981' : health ? '#F59E0B' : '#EF4444',
+              textTransform: 'uppercase' as const,
+              letterSpacing: '-0.01em',
+            }}>
+              {hookLoading ? 'Checking...' : allOk ? 'All Systems Operational' : health ? 'System Degraded' : 'Backend Offline'}
             </p>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
               Last checked: {lastUpdated ? lastUpdated.toLocaleTimeString() : '—'} · Auto-refreshes every 10s
             </p>
+            {failingComponents.length > 0 && (
+              <p style={{ fontSize: '0.8rem', color: '#FCD34D', marginTop: 6 }}>
+                Failing: {failingComponents.join(', ')}
+              </p>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Response Time</p>
-            <p className="font-mono" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>{latestLatency}ms</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+              Response Time
+            </p>
+            <p className="font-mono" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {health?.response_time_ms ?? latency}ms
+            </p>
           </div>
-          <button className="btn-ghost" onClick={fetchHealth} style={{ padding: '8px 12px' }}>
-            <RefreshCw size={14} />
+          <button className="btn-ghost" onClick={handleRefresh} style={{ padding: '8px 12px' }}>
+            <RefreshCw size={14} style={{ animation: manualLoading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
         </div>
       </motion.div>
 
-      {/* Service Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      {/* Service Cards — 3 columns (API, Database, ML Model) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         <ServiceCard
           name="API"
           icon={<Server size={16} />}
-          status={health ? 'healthy' : 'offline'}
-          detail={`${latestLatency}ms response`}
+          status={health ? (allOk ? 'HEALTHY' : 'DEGRADED') : 'OFFLINE'}
+          detail={health ? `${health.response_time_ms}ms response` : 'Cannot reach backend'}
+          variant={health ? (allOk ? 'healthy' : 'warning') : 'error'}
         />
         <ServiceCard
           name="Database"
           icon={<Database size={16} />}
-          status={health?.database ?? 'unknown'}
-        />
-        <ServiceCard
-          name="Redis"
-          icon={<Cpu size={16} />}
-          status={health?.redis ?? 'n/a'}
+          status={
+            !health ? 'UNKNOWN' :
+            dbStatus === 'connected' ? 'HEALTHY' : 'ERROR'
+          }
+          detail={health?.components?.database?.detail ?? 'No data'}
+          variant={
+            !health ? 'unknown' :
+            dbStatus === 'connected' ? 'healthy' : 'error'
+          }
         />
         <ServiceCard
           name="ML Model"
           icon={<Activity size={16} />}
-          status={health?.ml_model ?? 'n/a'}
+          status={
+            !health ? 'UNKNOWN' :
+            mlStatus === 'loaded' ? 'LOADED' : 'NOT LOADED'
+          }
+          detail={health?.components?.ml_model?.detail ?? 'No data'}
+          variant={
+            !health ? 'unknown' :
+            mlStatus === 'loaded' ? 'healthy' : 'warning'
+          }
         />
       </div>
 
       {/* Sparkline History */}
       {history.length > 1 && (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
-          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
             Response Time History (last {history.length} checks)
           </p>
           <div style={{ height: 80 }}>
@@ -193,7 +234,7 @@ export function HealthPage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Oldest</span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Latest: {latestLatency}ms</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Latest: {latency}ms</span>
           </div>
         </div>
       )}

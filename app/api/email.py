@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.models.email import Email
+from app.models.scan import Scan
 from app.schemas.email import (
     EmailOut,
     EmailDetailOut,
     FetchEmailsResponse,
     EmailListResponse,
 )
+from app.schemas.scan import ScanOut
 from app.services.email_service import EmailService
 
 router = APIRouter(prefix="/emails", tags=["Emails"])
@@ -93,3 +95,21 @@ async def get_email(email_id: int, db: Session = Depends(get_db)):
     data["body_html"] = email.body_html
     data["attachments"] = [att.to_dict() for att in email.attachments]
     return EmailDetailOut(**data)
+
+
+@router.get("/{email_id}/latest-scan")
+async def get_latest_scan(email_id: int, db: Session = Depends(get_db)):
+    """Get the most recent scan result for a given email."""
+    email = db.query(Email).filter(Email.id == email_id).first()
+    if not email:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    scan = (
+        db.query(Scan)
+        .filter(Scan.email_id == email_id)
+        .order_by(Scan.id.desc())
+        .first()
+    )
+    if scan:
+        return ScanOut(**scan.to_dict())
+    return {"scan": None}

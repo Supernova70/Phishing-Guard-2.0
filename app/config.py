@@ -63,3 +63,12 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Cached settings singleton — call this everywhere."""
     return Settings()
+
+
+# ── Future: Redis (Semester 2) ───────────────────────────────────────
+# Redis will be added in Semester 2 for:
+#   - VirusTotal result caching (reduce API quota usage)
+#   - Celery task queue for async scan execution
+#   - Playwright headless browser job queuing
+# When ready, add: REDIS_URL: str = "redis://redis:6379/0"
+# and add redis service back to docker-compose.yml
