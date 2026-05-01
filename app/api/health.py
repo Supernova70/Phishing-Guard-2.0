@@ -1,4 +1,4 @@
-"""Health check endpoint — checks DB and ML Model status."""
+"""Health check endpoint — checks DB, ML Model, and VirusTotal status."""
 
 import time
 import logging
@@ -16,7 +16,7 @@ router = APIRouter(tags=["System"])
 
 @router.get("/health")
 async def health_check():
-    """System health check — returns component status for DB and ML model."""
+    """System health check — returns component status for DB, ML model, and VT."""
     settings = get_settings()
     overall = "ok"
     start = time.time()
@@ -49,6 +49,15 @@ async def health_check():
         overall = "degraded"
         logger.warning(f"Health check — ML model error: {e}")
 
+    # ── 3. VirusTotal Check ───────────────────────────────────────────
+    vt_keys = settings.vt_api_keys
+    vt_status = "configured" if vt_keys else "not_configured"
+    vt_detail = (
+        f"{len(vt_keys)} API key(s) loaded"
+        if vt_keys
+        else "No API keys — set VIRUSTOTAL_API_KEYS in .env"
+    )
+
     response_time_ms = round((time.time() - start) * 1000)
 
     return {
@@ -63,6 +72,11 @@ async def health_check():
             "ml_model": {
                 "status": ml_status,
                 "detail": ml_detail,
+            },
+            "virustotal": {
+                "status": vt_status,
+                "key_count": len(vt_keys),
+                "detail": vt_detail,
             },
         },
     }

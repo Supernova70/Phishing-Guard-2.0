@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { RefreshCw, AlertTriangle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { fetchEmails } from '../../api/client';

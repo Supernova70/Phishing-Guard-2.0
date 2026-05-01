@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, Copy, Check, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { getScan, getEmail } from '../api/client';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
@@ -9,6 +9,7 @@ import { ScoreGauge } from '../components/ui/ScoreGauge';
 import { JsonViewer } from '../components/ui/JsonViewer';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Scan, EmailDetail, ScanBreakdown } from '../types';
+import { getVtUrlLink, getVtFileLink } from '../utils/virustotal';
 
 // ─── Verdict Hero ─────────────────────────────────────────────────────────────
 function VerdictHero({ scan }: { scan: Scan }) {
@@ -143,13 +144,13 @@ function UrlRow({ urlEntry }: { urlEntry: ScanBreakdown['url']['per_url'][0] }) 
             </div>
           )}
           <a
-            href={`https://www.virustotal.com/gui/search/${encodeURIComponent(url)}`}
+            href={getVtUrlLink(url)}
             target="_blank"
             rel="noreferrer noopener"
             onClick={(e) => e.stopPropagation()}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'none' }}
           >
-            <ExternalLink size={12} /> Open in VirusTotal
+            <ExternalLink size={12} /> Open in VirusTotal ↗
           </a>
         </div>
       )}
@@ -336,6 +337,54 @@ export function ScanDetail() {
                     <ScoreBadge score={file.risk_score} />
                   </div>
                   <ScoreBar score={file.risk_score} label="Risk Score" />
+
+                  {/* VT Hash Results */}
+                  {(file.vt_total ?? 0) > 0 && (
+                    <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-input)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>VT Hash Check: </span>
+                      <span style={{
+                        fontFamily: 'JetBrains Mono, monospace',
+                        fontSize: '0.72rem',
+                        color: (file.vt_malicious ?? 0) > 0 ? '#EF4444' : '#10B981',
+                        fontWeight: 700,
+                      }}>
+                        {(file.vt_malicious ?? 0) > 0
+                          ? `${file.vt_malicious} malicious · ${file.vt_suspicious ?? 0} suspicious`
+                          : `Clean (${file.vt_total} engines checked)`
+                        }
+                      </span>
+                    </div>
+                  )}
+
+                  {/* VT Error */}
+                  {file.vt_error && (
+                    <div style={{ fontSize: '0.72rem', color: '#FCD34D', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      ⚠ VT: {file.vt_error}
+                    </div>
+                  )}
+
+                  {/* Open in VirusTotal (file hash link) */}
+                  {file.sha256 && (
+                    <div style={{ marginTop: 10 }}>
+                      <a
+                        href={getVtFileLink(file.sha256)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          color: '#3B82F6',
+                          fontSize: '0.75rem',
+                          textDecoration: 'none',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <ExternalLink size={12} />
+                        Open in VirusTotal ↗
+                      </a>
+                    </div>
+                  )}
 
                   {file.yara_matches.length > 0 && (
                     <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>

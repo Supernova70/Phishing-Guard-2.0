@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertCircle, ScanSearch, Brain, Link2, Paperclip } from 'lucide-react';
 import { getScans, getEmails } from '../api/client';
-import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
+import { ClassificationBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { formatDistanceToNow } from 'date-fns';
 import type { Scan, Email } from '../types';

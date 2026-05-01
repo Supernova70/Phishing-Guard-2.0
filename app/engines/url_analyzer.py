@@ -254,12 +254,20 @@ class UrlAnalyzer:
     # Caching will be re-added in Semester 2 with Redis.
 
     def _check_virustotal(self, result: UrlAnalysisResult) -> None:
+        if not self._vt_keys:
+            result.vt_error = "No VT API keys configured — set VIRUSTOTAL_API_KEYS in .env"
+            logger.warning("VT lookup skipped: no API keys configured")
+            return
+
         url_id = base64.urlsafe_b64encode(result.normalized_url.encode()).decode().rstrip("=")
 
         api_key = self._vt_keys[self._vt_key_index]
         self._vt_key_index = (self._vt_key_index + 1) % len(self._vt_keys)
         
         headers = {"x-apikey": api_key}
+
+        # Log that we are actually calling VT
+        logger.info(f"VT lookup for URL: {result.normalized_url[:80]}")
         
         try:
             with httpx.Client(timeout=10.0) as client:
@@ -268,6 +276,10 @@ class UrlAnalyzer:
                 if resp.status_code == 200:
                     data = resp.json()["data"]["attributes"]["last_analysis_stats"]
                     self._apply_vt_stats(result, data)
+                    logger.info(
+                        f"VT result: malicious={result.vt_malicious} "
+                        f"suspicious={result.vt_suspicious} total={result.vt_total}"
+                    )
                         
                 elif resp.status_code == 404:
                     result.vt_error = "Submitted to VT — not yet analyzed"
@@ -275,6 +287,7 @@ class UrlAnalyzer:
                     client.post("https://www.virustotal.com/api/v3/urls", data={"url": result.normalized_url}, headers=headers)
                 elif resp.status_code == 429:
                     result.vt_error = "VT rate limit — heuristic score only"
+                    logger.warning(f"VT rate limit hit for URL: {result.normalized_url[:60]}")
                 else:
                     logger.warning(f"VT Error {resp.status_code} for {result.normalized_url}")
                     result.vt_error = f"VT HTTP Error {resp.status_code}"
@@ -294,3 +307,4 @@ class UrlAnalyzer:
             
         if result.vt_malicious > 0:
             result.heuristic_flags.insert(0, f"VT found {result.vt_malicious} malicious reports")
+

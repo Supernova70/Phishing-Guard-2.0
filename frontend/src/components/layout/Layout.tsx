@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, WifiOff } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '../ui/Toast';

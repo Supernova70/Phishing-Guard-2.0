@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Link2, Search, AlertTriangle, Shield, ExternalLink, Copy, Check } from 'lucide-react';
+import { Link2, Search, ExternalLink, Copy, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { Scan } from '../types';
+import { getVtUrlLink } from '../utils/virustotal';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface UrlEntry {
@@ -11,6 +11,9 @@ interface UrlEntry {
   score: number;
   heuristic_score?: number;
   vt_malicious: number;
+  vt_suspicious?: number;
+  vt_total?: number;
+  vt_error?: string | null;
   top_flags: string[];
   scan_id: number;
   email_id: number;
@@ -54,8 +57,34 @@ function UrlRow({ entry, expanded, onExpand }: {
   const scoreBg = entry.score >= 70 ? 'rgba(239,68,68,0.12)' : entry.score >= 30 ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)';
 
   const displayUrl = entry.url.length > 60 ? entry.url.slice(0, 60) + '…' : entry.url;
-  const vtText = entry.vt_malicious > 0 ? `${entry.vt_malicious} malicious` : 'Clean / Not checked';
-  const vtColor = entry.vt_malicious > 0 ? '#FCA5A5' : 'var(--text-muted)';
+
+  // Determine VT detection label and color based on available data
+  let vtText: string;
+  let vtColor: string;
+  if ((entry.vt_total ?? 0) > 0) {
+    if (entry.vt_malicious > 0) {
+      vtText = `${entry.vt_malicious} malicious`;
+      vtColor = '#FCA5A5';
+    } else if ((entry.vt_suspicious ?? 0) > 0) {
+      vtText = `${entry.vt_suspicious} suspicious`;
+      vtColor = '#FCD34D';
+    } else {
+      vtText = `Clean (${entry.vt_total} engines)`;
+      vtColor = '#10B981';
+    }
+  } else if (entry.vt_error && entry.vt_error.includes('No API keys')) {
+    vtText = 'VT not configured';
+    vtColor = '#F59E0B';
+  } else if (entry.vt_error && entry.vt_error.includes('rate limit')) {
+    vtText = 'Rate limited';
+    vtColor = '#F59E0B';
+  } else if (entry.vt_error) {
+    vtText = 'VT error';
+    vtColor = '#EF4444';
+  } else {
+    vtText = 'Not checked';
+    vtColor = 'var(--text-muted)';
+  }
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -73,7 +102,7 @@ function UrlRow({ entry, expanded, onExpand }: {
         onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = expanded ? 'rgba(99,102,241,0.05)' : '')}
       >
         <td style={{ maxWidth: 260, padding: '10px 12px' }}>
-          <span title={entry.url} style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.72rem' }}>
+          <span title={entry.url} style={{ color: 'var(--text-secondary)', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.72rem' }}>
             {displayUrl}
           </span>
         </td>
@@ -190,6 +219,24 @@ function UrlRow({ entry, expanded, onExpand }: {
                 </button>{' '}
                 of email #{entry.email_id}
               </p>
+
+              {/* VT error detail */}
+              {entry.vt_error && (
+                <div style={{ color: '#FCD34D', fontSize: '12px', marginTop: '4px' }}>
+                  ⚠ VT: {entry.vt_error}
+                </div>
+              )}
+
+              {/* Open in VirusTotal */}
+              <a
+                href={getVtUrlLink(entry.url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}
+              >
+                <ExternalLink size={12} /> Open in VirusTotal ↗
+              </a>
             </div>
           </td>
         </tr>
@@ -234,11 +281,15 @@ export function UrlAnalysis() {
           const key = `${u.url}::${s.id}`;
           if (!seen.has(key)) {
             seen.add(key);
+            const vtDet = u.vt_detections;
             urls.push({
               url: u.url,
               score: u.score ?? u.final_score ?? 0,
               heuristic_score: u.heuristic_score,
-              vt_malicious: u.vt_malicious ?? 0,
+              vt_malicious: u.vt_malicious ?? vtDet?.malicious ?? 0,
+              vt_suspicious: (u as any).vt_suspicious ?? vtDet?.suspicious ?? 0,
+              vt_total: (u as any).vt_total ?? vtDet?.total ?? 0,
+              vt_error: (u as any).vt_error ?? null,
               top_flags: u.top_flags ?? u.flags ?? [],
               scan_id: s.id,
               email_id: s.email_id,
@@ -256,6 +307,16 @@ export function UrlAnalysis() {
   const totalUrls = allUrls.length;
   const highRisk = allUrls.filter((u) => u.score >= 70).length;
   const vtFlagged = allUrls.filter((u) => u.vt_malicious > 0).length;
+
+  // VT Status: derive from url data
+  const vtStatus = useMemo(() => {
+    if (allUrls.length === 0) return { label: 'No Data', color: 'var(--text-muted)', subtitle: 'Run scans to see VT status' };
+    const anyVtRan = allUrls.some((u) => (u.vt_total ?? 0) > 0);
+    if (anyVtRan) return { label: 'Active', color: '#10B981', subtitle: 'VirusTotal checks running' };
+    const allNoKeys = allUrls.every((u) => u.vt_error && u.vt_error.includes('No API keys'));
+    if (allNoKeys) return { label: 'Not Configured', color: '#F59E0B', subtitle: 'Set VIRUSTOTAL_API_KEYS in .env' };
+    return { label: 'Pending', color: '#3B82F6', subtitle: 'Keys configured, results pending' };
+  }, [allUrls]);
 
   // Filter + sort
   const filtered = useMemo(() => {
@@ -286,10 +347,22 @@ export function UrlAnalysis() {
   return (
     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* KPI Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <KpiCard title="Total URLs Analyzed" value={totalUrls} accent="var(--primary)" />
         <KpiCard title="High Risk URLs" value={highRisk} accent="#EF4444" />
         <KpiCard title="VT Flagged" value={vtFlagged} accent="#F59E0B" />
+        {/* VT Status card */}
+        <div style={{
+          background: 'var(--bg-card)',
+          border: `1px solid var(--border-default)`,
+          borderLeft: `3px solid ${vtStatus.color}`,
+          borderRadius: 8,
+          padding: '16px 20px',
+        }}>
+          <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>VT Status</p>
+          <p className="font-mono" style={{ fontSize: '1rem', fontWeight: 700, color: vtStatus.color, lineHeight: 1.2 }}>{vtStatus.label}</p>
+          <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 4 }}>{vtStatus.subtitle}</p>
+        </div>
       </div>
 
       {/* Filter Bar */}

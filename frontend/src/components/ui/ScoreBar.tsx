@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 interface ScoreBarProps {
   score: number;       // 0–100
