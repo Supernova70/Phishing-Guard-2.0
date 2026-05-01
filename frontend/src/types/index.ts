@@ -100,6 +100,13 @@ export interface ScanBreakdown {
         tags: string[];
         description: string;
       }>;
+      // VirusTotal hash lookup results
+      sha256?: string;
+      vt_malicious?: number;
+      vt_suspicious?: number;
+      vt_harmless?: number;
+      vt_total?: number;
+      vt_error?: string | null;
     }>;
   };
 }

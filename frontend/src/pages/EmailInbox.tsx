@@ -15,7 +15,7 @@ import {
   File,
 } from 'lucide-react';
 import { getEmails, getEmail, fetchEmails } from '../api/client';
-import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
+
 import { LoadingDots } from '../components/ui/LoadingDots';
 import { formatDistanceToNow, format } from 'date-fns';
 import type { Email, EmailDetail, Attachment } from '../types';
@@ -48,7 +48,7 @@ function SenderAvatar({ sender }: { sender: string }) {
 }
 
 // ─── File Type Icon ─────────────────────────────────────────────────────────────
-function FileTypeIcon({ filename, contentType }: { filename: string; contentType: string | null }) {
+function FileTypeIcon({ filename }: { filename: string; contentType: string | null }) {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   if (['pdf'].includes(ext)) return <FileText size={18} style={{ color: '#EF4444' }} />;
   if (['exe', 'dll', 'bat', 'ps1'].includes(ext)) return <Code size={18} style={{ color: '#F59E0B' }} />;
@@ -389,14 +389,20 @@ export function EmailInbox() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   const loadEmails = async () => {
     setLoading(true);
     try {
       const data = await getEmails(0, 100);
-      setEmails(data);
-      if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
+      // Sort newest first (fetched_at DESC) as a client-side safety net
+      const sorted = [...data].sort((a, b) => {
+        const dateA = new Date(a.fetched_at).getTime();
+        const dateB = new Date(b.fetched_at).getTime();
+        return dateB - dateA; // descending — newest first
+      });
+      setEmails(sorted);
+      if (sorted.length > 0 && !selectedId) setSelectedId(sorted[0].id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {

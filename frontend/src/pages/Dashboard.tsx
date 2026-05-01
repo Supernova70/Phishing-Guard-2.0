@@ -126,7 +126,7 @@ function RecentActivity({ scans, emails, onViewScan }: { scans: Scan[]; emails: 
         </tr>
       </thead>
       <tbody>
-        {recent.map((scan, i) => {
+        {recent.map((scan) => {
           const email = emailMap.get(scan.email_id);
           const v = scan.verdict;
           return (

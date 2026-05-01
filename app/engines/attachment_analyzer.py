@@ -24,6 +24,7 @@ Usage (mirrors text_analyzer.py pattern):
 import io
 import logging
 import os
+import httpx
 from dataclasses import dataclass, field
 from typing import List, Optional, TYPE_CHECKING
 
@@ -136,6 +137,12 @@ class AttachmentAnalyzer:
                 "findings": file_result.findings,
                 "indicators": file_result.indicators,
                 "yara_matches": file_result.indicators.get("yara_matches", []),
+                "sha256": att.sha256_hash,
+                "vt_malicious": file_result.vt_malicious,
+                "vt_suspicious": file_result.vt_suspicious,
+                "vt_harmless": file_result.vt_harmless,
+                "vt_total": file_result.vt_total,
+                "vt_error": file_result.vt_error,
             })
 
         # ── Aggregate score: worst file dominates ──────────────────
@@ -244,7 +251,119 @@ class AttachmentAnalyzer:
         elif yara_result.error:
             logger.debug(f"YARA note for '{filename}': {yara_result.error}")
 
+        # ── VirusTotal hash lookup (if enabled) ───────────────────────
+        sha256 = att.sha256_hash
+        if self._settings.ENABLE_VT_HASH_LOOKUP:
+            vt_result = self._vt_hash_lookup(sha256 or "")
+        else:
+            vt_result = {
+                "malicious": 0, "suspicious": 0, "harmless": 0, "total": 0,
+                "error": "VT hash lookup disabled (ENABLE_VT_HASH_LOOKUP=False)",
+            }
+
+        file_result.vt_malicious = vt_result["malicious"]
+        file_result.vt_suspicious = vt_result["suspicious"]
+        file_result.vt_harmless = vt_result["harmless"]
+        file_result.vt_total = vt_result["total"]
+        file_result.vt_error = vt_result["error"]
+
+        # Boost risk score if VT flagged the file
+        if vt_result["malicious"] > 0:
+            weighted = vt_result["malicious"] + (vt_result["suspicious"] * 0.5)
+            vt_score = min(100.0, (weighted / vt_result["total"]) * 100) if vt_result["total"] > 0 else 80.0
+            file_result.risk_score = max(file_result.risk_score, vt_score)
+            file_result.findings.insert(
+                0, f"VirusTotal: {vt_result['malicious']} engines flagged as malicious"
+            )
+
         return file_result
+
+    def _vt_hash_lookup(self, sha256: str) -> dict:
+        """
+        Look up a file hash on VirusTotal.
+        Uses GET /api/v3/files/{hash} endpoint.
+        Returns dict with keys: malicious, suspicious, harmless, total, error
+        """
+        settings = get_settings()
+        vt_keys = settings.vt_api_keys
+
+        if not vt_keys:
+            return {
+                "malicious": 0, "suspicious": 0,
+                "harmless": 0, "total": 0,
+                "error": "No VT API keys configured",
+            }
+
+        if not sha256 or len(sha256) != 64:
+            return {
+                "malicious": 0, "suspicious": 0,
+                "harmless": 0, "total": 0,
+                "error": "Invalid SHA256 hash",
+            }
+
+        api_key = vt_keys[0]  # use first key (rotation can come later)
+
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(
+                    f"https://www.virustotal.com/api/v3/files/{sha256}",
+                    headers={"x-apikey": api_key},
+                )
+
+            if resp.status_code == 200:
+                data = resp.json()
+                stats = (
+                    data.get("data", {})
+                        .get("attributes", {})
+                        .get("last_analysis_stats", {})
+                )
+                malicious  = int(stats.get("malicious", 0))
+                suspicious = int(stats.get("suspicious", 0))
+                harmless   = int(stats.get("harmless", 0))
+                undetected = int(stats.get("undetected", 0))
+                total = malicious + suspicious + harmless + undetected
+                logger.info(
+                    f"VT file result for {sha256[:8]}…: "
+                    f"malicious={malicious} suspicious={suspicious} total={total}"
+                )
+                return {
+                    "malicious": malicious,
+                    "suspicious": suspicious,
+                    "harmless": harmless,
+                    "total": total,
+                    "error": None,
+                }
+
+            elif resp.status_code == 404:
+                # File not in VT database — common for clean/unknown files
+                return {
+                    "malicious": 0, "suspicious": 0,
+                    "harmless": 0, "total": 0,
+                    "error": "File not in VT database (possibly clean or unknown)",
+                }
+
+            elif resp.status_code == 429:
+                logger.warning("VT rate limit hit for file hash lookup")
+                return {
+                    "malicious": 0, "suspicious": 0,
+                    "harmless": 0, "total": 0,
+                    "error": "VT rate limit (429)",
+                }
+
+            else:
+                return {
+                    "malicious": 0, "suspicious": 0,
+                    "harmless": 0, "total": 0,
+                    "error": f"VT HTTP {resp.status_code}",
+                }
+
+        except Exception as e:
+            logger.error(f"VT file hash lookup failed for {sha256[:8]}…: {e}")
+            return {
+                "malicious": 0, "suspicious": 0,
+                "harmless": 0, "total": 0,
+                "error": str(e)[:100],
+            }
 
 
     def _detect_mime(self, data: bytes) -> Optional[str]:
