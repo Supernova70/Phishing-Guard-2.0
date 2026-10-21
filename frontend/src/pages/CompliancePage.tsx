@@ -33,6 +33,7 @@ const ACTION_COLORS: Record<string, string> = {
   report_export: 'var(--safe)',
   retention_purge: 'var(--danger)',
   evidence_append: 'var(--text-secondary)',
+  evidence_rechain: 'var(--danger)',
 };
 
 const cardStyle: React.CSSProperties = {

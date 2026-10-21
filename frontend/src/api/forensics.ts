@@ -455,6 +455,7 @@ export const AUDIT_ACTIONS = [
   'report_export',
   'retention_purge',
   'evidence_append',
+  'evidence_rechain',
 ] as const;
 
 export const evidenceRawUrl = (emailId: number): string =>
