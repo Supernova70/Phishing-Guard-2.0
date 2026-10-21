@@ -10,7 +10,7 @@
 
 These capabilities were added on top of the original roadmap and are live in
 production (`https://phishing-guard.duckdns.org`). All are covered by the
-offline test suite (622 tests at the time of writing).
+offline test suite (635 tests at the time of writing).
 
 | Capability | What it does | Where |
 |---|---|---|
@@ -20,8 +20,9 @@ offline test suite (622 tests at the time of writing).
 | **Quishing (QR) detection** | Decodes QR/barcodes from images (PNG/JPEG/GIF/BMP/TIFF/WebP) and rasterised PDF pages (≤5 pages, ≤25 symbols, 40 MP guard). Decoded URLs are deduplicated against body links and scored by the URL engine (heuristics, VT, lookalike); symbols are preserved for forensics. QR presence alone adds no attachment score. | `app/engines/analyzers/qr_analyzer.py`, `app/services/scan_service.py` (`breakdown.qr`), `POST /attachments/qr-scan`, Attachments inspector + Scan Detail panel |
 | **Analyst feedback loop** | One ground-truth label per scan/user (`phishing` / `legitimate` / `unsure`) with the model prediction snapshotted. Metrics at the threat boundary (suspicious+dangerous): confusion matrix, accuracy, precision, recall, F1, per-class confirmed/disputed counts. | `app/models/feedback.py`, migration `0013_verdict_feedback.py`, `POST/GET /scans/{id}/feedback`, `GET /intel/model-performance`, feedback card on Scan Detail + dashboard model-health card |
 | **Global search** | Header palette (Cmd/Ctrl+K) searches email subject/sender, completed scans (newest scan per email, exact id lookup when numeric) and IOC values. Results are grouped, owner-scoped and navigate directly to the matching scan or inbox. | `app/api/search.py`, `GET /search`, `frontend/src/components/layout/Header.tsx` |
+| **Live alert push** | Server-Sent Events stream sends the unread count on connect, then one named `alert` event per new high-risk/spoof/BEC scan. The bell prepends the alert and increments its badge without a reload; a 30-second poll stays as a fallback. Cursor = connect-time max alert id, so reconnects never replay old notifications. | `app/api/alerts.py` (`GET /alerts/stream`), `frontend/src/components/layout/AlertBell.tsx` |
 
-**Still backlog (P2):** server-sent-event alert push. It does not block the judges' demo.
+All P2 backlog items are now delivered.
 
 
 ## Table of Contents
