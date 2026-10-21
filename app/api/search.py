@@ -62,10 +62,21 @@ async def global_search(
             scan_filter,
         )
         .order_by(Scan.id.desc())
-        .limit(limit)
+        .limit(limit * 4)
         .all()
     )
+    seen_emails: set[int] = set()
+    unique_scans: List[Scan] = []
     for scan in scans:
+        # The corpus often contains repeated scans of the same message;
+        # surface only the newest scan per email.
+        if scan.email_id in seen_emails:
+            continue
+        seen_emails.add(scan.email_id)
+        unique_scans.append(scan)
+        if len(unique_scans) >= limit:
+            break
+    for scan in unique_scans:
         email = scan.email
         verdict = scan.verdict
         results.append(

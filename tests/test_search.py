@@ -139,6 +139,19 @@ def test_search_deduplicates_indicator_values(env):
     assert len(indicators) == 1
 
 
+def test_search_deduplicates_scans_of_the_same_email(env):
+    client, db = env
+    email = _seed_email(db, 6, "Repeated scan target", "repeat@test")
+    first = _seed_scan(db, email)
+    second = _seed_scan(db, email)
+    db.commit()
+
+    body = client.get("/search", params={"q": "Repeated"}).json()
+    scan_rows = [r for r in body["results"] if r["type"] == "scan"]
+    assert len(scan_rows) == 1
+    assert scan_rows[0]["id"] == max(first.id, second.id)
+
+
 def test_search_requires_a_non_empty_query(env):
     client, _ = env
     assert client.get("/search", params={"q": ""}).status_code == 422
