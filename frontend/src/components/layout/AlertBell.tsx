@@ -25,6 +25,41 @@ export function AlertBell() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // Live push: EventSource delivers new alerts immediately; the 30s poll
+  // above stays as a fallback for proxies that drop long-lived streams.
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const es = new EventSource(`${baseUrl}/api/alerts/stream`);
+    let failures = 0;
+
+    const handleReady = (e: Event) => {
+      failures = 0;
+      try {
+        const data = JSON.parse((e as MessageEvent).data) as { unread: number };
+        setUnread(data.unread);
+      } catch { /* ignore malformed frame */ }
+    };
+
+    const handleAlert = (e: Event) => {
+      try {
+        const alert = JSON.parse((e as MessageEvent).data) as AlertItem;
+        setAlerts((prev) => [alert, ...prev.filter((a) => a.id !== alert.id)].slice(0, 6));
+        setUnread((u) => u + 1);
+      } catch { /* ignore malformed frame */ }
+    };
+
+    es.addEventListener('ready', handleReady);
+    es.addEventListener('alert', handleAlert);
+    es.onerror = () => {
+      failures += 1;
+      // EventSource retries by itself; after 5 straight failures close it
+      // and let the polling fallback keep the bell current.
+      if (failures >= 5) es.close();
+    };
+
+    return () => es.close();
+  }, []);
+
   // Close on outside click
   useEffect(() => {
     if (!open) return;
