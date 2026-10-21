@@ -477,6 +477,30 @@ export const scanQrUpload = async (file: File): Promise<QrScanResult> => {
   return data;
 };
 
+// ─── Global search ──────────────────────────────────────────────────────────
+
+export type SearchResultType = 'scan' | 'email' | 'indicator';
+
+export interface SearchResult {
+  type: SearchResultType;
+  id: number;
+  title: string;
+  subtitle: string;
+  url: string;
+  classification?: Classification | null;
+  score?: number | null;
+  kind?: string | null;
+  sighting_count?: number;
+}
+
+export const globalSearch = async (query: string, limit = 5): Promise<SearchResult[]> => {
+  const { data } = await apiClient.get<{ total: number; results: SearchResult[] }>(
+    '/search',
+    { params: { q: query, limit } },
+  );
+  return data.results ?? [];
+};
+
 // ─── Analyst feedback / model performance ───────────────────────────────────
 
 export type FeedbackLabel = 'phishing' | 'legitimate' | 'unsure';
