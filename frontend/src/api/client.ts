@@ -479,6 +479,74 @@ export const closeIncident = async (
   return data;
 };
 
+// ─── Detection coverage / global findings (Phase 7) ──────────────────────────
+
+export interface DetectionFinding {
+  id: number;
+  scan_id: number;
+  email_id: number;
+  analyzer: string;
+  analyzer_version: string;
+  ruleset_version: string;
+  category: string;
+  code: string;
+  title: string;
+  severity: number;
+  confidence: number;
+  evidence_hash: string;
+  evidence: Array<{ kind: string; value: string; [key: string]: unknown }>;
+  details: Record<string, unknown>;
+  subject: string;
+  sender: string;
+  url: string;
+  created_at: string | null;
+}
+
+export interface DetectionSummary {
+  window_days: number;
+  generated_at: string;
+  totals: {
+    findings: number;
+    scans_with_findings: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  analyzers: Array<{ analyzer: string; findings: number; scans: number; max_severity: number }>;
+  categories: Array<{ category: string; findings: number; max_severity: number }>;
+  top_codes: Array<{ code: string; analyzer: string; findings: number; max_severity: number }>;
+  recent_high: DetectionFinding[];
+}
+
+export interface FindingsResponse {
+  count: number;
+  total: number;
+  offset: number;
+  limit: number;
+  findings: DetectionFinding[];
+}
+
+export const getFindings = async (params: {
+  analyzer?: string;
+  category?: string;
+  code?: string;
+  min_severity?: number;
+  scan_id?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<FindingsResponse> => {
+  const { data } = await apiClient.get<FindingsResponse>('/findings', { params });
+  return data;
+};
+
+export const getDetectionSummary = async (days = 30): Promise<DetectionSummary> => {
+  const { data } = await apiClient.get<DetectionSummary>('/detection/summary', {
+    params: { days },
+  });
+  return data;
+};
+
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
 export interface AttachmentSummary {

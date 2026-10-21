@@ -21,6 +21,7 @@ const PAGE_CONFIG: Record<string, { title: string; breadcrumbs: Array<{ label: s
   '/hunts': { title: 'Retroactive Hunts', breadcrumbs: [{ label: 'Analyze' }, { label: 'Retroactive Hunts' }] },
   '/alerts': { title: 'Alerts', breadcrumbs: [{ label: 'Monitor' }, { label: 'Alerts' }] },
   '/incidents': { title: 'Incident Response', breadcrumbs: [{ label: 'Monitor' }, { label: 'Incident Response' }] },
+  '/detection': { title: 'Detection Coverage', breadcrumbs: [{ label: 'Analyze' }, { label: 'Detection Coverage' }] },
   '/system-health': { title: 'API Health', breadcrumbs: [{ label: 'System' }, { label: 'API Health' }] },
   '/settings': { title: 'Settings', breadcrumbs: [{ label: 'System' }, { label: 'Settings' }] },
   '/users': { title: 'User Management', breadcrumbs: [{ label: 'System' }, { label: 'User Management' }] },
