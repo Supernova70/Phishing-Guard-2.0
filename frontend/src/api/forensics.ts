@@ -4,7 +4,7 @@
 // attribution graph, campaigns, forensic reports and the alert feed.
 
 import { apiClient } from './client';
-import type { Classification } from '../types';
+import type { Classification, QrScanResult } from '../types';
 
 // ─── Header forensics ────────────────────────────────────────────────────────
 
@@ -460,3 +460,19 @@ export const AUDIT_ACTIONS = [
 
 export const evidenceRawUrl = (emailId: number): string =>
   `/api/emails/${emailId}/evidence/raw`;
+
+// ─── Quishing (QR / barcode inspector) ──────────────────────────────────────
+
+/**
+ * Upload an image or PDF and decode any QR/barcodes inside it.
+ * Decoded http(s) URLs are scored by the URL engine server-side;
+ * dynamic browser analysis is disabled for uploads.
+ */
+export const scanQrUpload = async (file: File): Promise<QrScanResult> => {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await apiClient.post<QrScanResult>('/attachments/qr-scan', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
