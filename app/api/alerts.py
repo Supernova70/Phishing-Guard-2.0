@@ -62,7 +62,13 @@ async def _alert_event_stream(
         )
         unread = (
             db.query(Alert)
-            .filter(Alert.user_id == user_id, Alert.read_at.is_(None))
+            .filter(
+                Alert.user_id == user_id,
+                Alert.read_at.is_(None),
+                # Count only what the cursor covers; anything newer is
+                # delivered as an `alert` event and increments the badge.
+                Alert.id <= last_id,
+            )
             .count()
         )
     finally:
