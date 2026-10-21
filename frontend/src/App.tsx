@@ -19,6 +19,7 @@ import { UsersPage } from './pages/UsersPage';
 import { CompliancePage } from './pages/CompliancePage';
 import { HuntsPage } from './pages/HuntsPage';
 import { IncidentsPage } from './pages/IncidentsPage';
+import { DetectionPage } from './pages/DetectionPage';
 import { SystemHealthProvider } from './hooks/useSystemHealth';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RequirePermission } from './auth/RequirePermission';
@@ -76,6 +77,7 @@ export default function App() {
               <Route path="compliance" element={<CompliancePage />} />
               <Route path="hunts" element={<HuntsPage />} />
               <Route path="incidents" element={<IncidentsPage />} />
+              <Route path="detection" element={<DetectionPage />} />
               <Route path="system-health" element={
                 <RequirePermission permission="system.health"><HealthPage /></RequirePermission>
               } />
