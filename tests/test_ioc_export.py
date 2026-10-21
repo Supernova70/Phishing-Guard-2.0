@@ -19,7 +19,8 @@ from app.models import Base
 from app.models.campaign import Campaign
 from app.models.email import Email
 from app.models.indicator import Indicator
-from app.models.scan import Scan
+from app.models.scan import Scan, Verdict
+from app.models.url_result import UrlResult
 from tests.conftest import TEST_USER_ID, ensure_test_user, override_auth
 
 ROWS = [
@@ -96,7 +97,7 @@ def test_bundle_shape_and_deterministic_ids():
     assert first["spec_version"] == "2.1"
     assert first["pattern_type"] == "stix"
     assert first["pattern_version"] == "2.1"
-    assert first["indicator_types"] == ["malicious-activity"]
+    assert first["indicator_types"] == ["anomalous-activity"]
     assert first["valid_from"].endswith("Z")
     assert first["x_phishing_guard"]["scan_count"] == 3
 
@@ -143,7 +144,16 @@ def env(tmp_path):
     session.close()
 
 
-def _seed_scan(db, *, user_id=TEST_USER_ID, campaign_id=None, iocs=(), mid="m1"):
+def _seed_scan(
+    db,
+    *,
+    user_id=TEST_USER_ID,
+    campaign_id=None,
+    iocs=(),
+    mid="m1",
+    classification="dangerous",
+    url_scores=(),
+):
     email = Email(
         user_id=user_id,
         message_id=f"<{mid}@test>",
@@ -163,6 +173,25 @@ def _seed_scan(db, *, user_id=TEST_USER_ID, campaign_id=None, iocs=(), mid="m1")
     )
     db.add(scan)
     db.flush()
+    db.add(
+        Verdict(
+            scan_id=scan.id,
+            final_score=80.0 if classification != "safe" else 5.0,
+            classification=classification,
+            breakdown={},
+        )
+    )
+    for url, score in url_scores:
+        db.add(
+            UrlResult(
+                scan_id=scan.id,
+                original_url=url,
+                normalized_url=url,
+                heuristic_score=score,
+                final_score=score,
+                vt_malicious=0,
+            )
+        )
     for kind, value in iocs:
         db.add(
             Indicator(
@@ -188,12 +217,29 @@ def test_export_stix_and_csv(env):
         db,
         campaign_id=campaign.id,
         mid="m1",
-        iocs=[("sender_domain", "evil.example"), ("attachment_hash", "b" * 64)],
+        iocs=[
+            ("sender_domain", "evil.example"),
+            ("attachment_hash", "b" * 64),
+            ("url_domain", "evil.example"),
+        ],
+        url_scores=[("https://evil.example/login", 72.0)],
     )
     _seed_scan(
         db,
         mid="m2",
-        iocs=[("origin_ip", "203.0.113.9"), ("lookalike_brand", "paypal")],
+        iocs=[
+            ("origin_ip", "203.0.113.9"),
+            ("lookalike_brand", "paypal"),
+            # Low-risk shared infrastructure must not be exported.
+            ("url_domain", "google.com"),
+        ],
+    )
+    # Indicators from SAFE scans are not threat intelligence.
+    _seed_scan(
+        db,
+        mid="m2-safe",
+        classification="safe",
+        iocs=[("sender_domain", "legit.example")],
     )
     # Another tenant's IoC must never leak into the export.
     _seed_scan(
@@ -211,6 +257,8 @@ def test_export_stix_and_csv(env):
     values = {o["x_phishing_guard"]["value"] for o in indicators}
     assert values == {"evil.example", "203.0.113.9", "b" * 64}
     assert "other.example" not in values
+    assert "legit.example" not in values
+    assert "google.com" not in values
 
     scoped = env["client"].get(
         "/export/stix", params={"campaign_id": campaign.id}
