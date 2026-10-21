@@ -593,7 +593,8 @@ function ConversationCard({ scanId }: { scanId: number }) {
             (item) =>
               item.category === 'thread' ||
               item.category === 'bec' ||
-              item.category === 'identity',
+              item.category === 'identity' ||
+              item.category === 'kit',
           );
           setFindings(conversationFindings);
           setConversation(findingsResult.value.conversation);
