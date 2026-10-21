@@ -102,8 +102,27 @@ class UrlAnalyzer:
         scan_id: int | None = None,
         sender_domain: str | None = None,
         sender_authenticated: bool = False,
+        extra_urls: Optional[List[str]] = None,
     ) -> UrlEngineResult:
         urls = self._extract_and_deduplicate(body_text or "", body_html or "")
+
+        # Additional URLs that did not come from the body: QR codes hidden in
+        # attachments (quishing), decoded barcodes, etc. Deduplicate against
+        # body URLs so the same link is never scored twice.
+        if extra_urls:
+            seen = {normalized for _, normalized in urls}
+            for raw in extra_urls:
+                raw = (raw or "").strip()
+                if not raw.lower().startswith("http"):
+                    continue
+                normalized = self._normalize(raw)
+                if not normalized or self._is_local_ip(normalized):
+                    continue
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                urls.append((raw, normalized))
+            urls.sort(key=lambda item: item[1])
 
         sender_reg = None
         if sender_domain:

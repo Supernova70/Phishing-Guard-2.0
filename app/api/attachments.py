@@ -5,12 +5,15 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.dependencies import get_current_user, get_db, owned_or_404
+from app.engines.analyzers.qr_analyzer import analyze_attachment_bytes, available as qr_available
+from app.engines.url_analyzer import UrlAnalyzer
 from app.models.email import Attachment, Email
 from app.models.user import User
 from app.models.scan import Scan, ScanStatus, Verdict
@@ -46,6 +49,91 @@ class AttachmentDetail(BaseModel):
     email_sender: str = ""
     email_date: Optional[str] = None
     scan_results: list[dict] = []
+
+
+class QrScanResponse(BaseModel):
+    filename: str
+    size_bytes: int
+    code_count: int
+    codes: list[dict] = []
+    urls: list[str] = []
+    url_analysis: list[dict] = []
+    max_url_score: float = 0.0
+    note: Optional[str] = None
+
+
+MAX_QR_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/qr-scan", response_model=QrScanResponse)
+async def scan_qr_upload(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Decode QR/barcodes from an uploaded image or PDF (quishing inspector).
+
+    URLs found in the symbol are scored by the URL engine (heuristics +
+    VirusTotal). Dynamic browser analysis is intentionally disabled for
+    uploads: the caller supplies arbitrary content, so the endpoint must
+    not navigate to it.
+    """
+    if not qr_available():
+        raise HTTPException(
+            status_code=503,
+            detail="QR decoder not available on this deployment",
+        )
+
+    data = await file.read(MAX_QR_UPLOAD_BYTES + 1)
+    if len(data) > MAX_QR_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the {MAX_QR_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    summary = analyze_attachment_bytes(data, file.filename or "upload")
+    urls = summary["urls"]
+
+    analysis: list[dict] = []
+    max_score = 0.0
+    if urls:
+        settings = get_settings().model_copy(
+            update={"DYNAMIC_URL_ENABLED": False}
+        )
+        result = UrlAnalyzer(settings=settings).analyze(
+            "", "", extra_urls=urls
+        )
+        max_score = result.url_score
+        analysis = [
+            {
+                "url": ur.original_url,
+                "final_url": ur.final_url,
+                "score": ur.final_score,
+                "heuristic_score": ur.heuristic_score,
+                "vt_malicious": ur.vt_malicious,
+                "vt_total": ur.vt_total,
+                "flags": (ur.heuristic_flags or [])[:8],
+            }
+            for ur in result.per_url_results
+        ]
+
+    note = None
+    if summary["count"] == 0:
+        note = "No QR or barcode found in this file."
+    elif not urls:
+        note = "Symbol decoded, but its payload is not an http(s) URL."
+
+    return QrScanResponse(
+        filename=file.filename or "upload",
+        size_bytes=len(data),
+        code_count=summary["count"],
+        codes=summary["codes"],
+        urls=urls,
+        url_analysis=analysis,
+        max_url_score=max_score,
+        note=note,
+    )
 
 
 class AttachmentListResponse(BaseModel):

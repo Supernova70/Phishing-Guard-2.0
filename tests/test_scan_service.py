@@ -475,3 +475,80 @@ class TestBecLookalikeIntegration:
         verdict = _last_verdict(db)
         assert verdict.ai_score == 5.0           # max(5, 0, 0)
         assert verdict.breakdown["ai"]["flags"] == []
+
+
+def test_qr_urls_are_scored_and_recorded_in_breakdown():
+    """Quishing: URLs decoded from attachments feed the URL engine."""
+    with patch("app.services.scan_service.get_text_analyzer") as mock_get_text, \
+         patch("app.services.scan_service.AttachmentAnalyzer") as MockAtt, \
+         patch("app.services.scan_service.UrlAnalyzer") as MockUrl:
+        db = MagicMock()
+
+        mock_text = MagicMock()
+        mock_text.analyze.return_value.confidence = 0.0
+        mock_text.analyze.return_value.label = "Legitimate"
+        mock_text.analyze.return_value.is_phishing = False
+        mock_get_text.return_value = mock_text
+
+        body_result = MagicMock()
+        body_result.url_score = 0.0
+        body_result.total_urls = 0
+        body_result.analyzed_urls = 0
+        body_result.vt_checked_urls = 0
+        body_result.high_risk_urls = []
+        body_result.per_url_results = []
+
+        qr_result = MagicMock()
+        qr_result.url_score = 75.0
+        qr_result.total_urls = 1
+        qr_result.analyzed_urls = 1
+        qr_result.vt_checked_urls = 0
+        qr_result.high_risk_urls = ["https://qr-entry.example/verify"]
+        qr_result.per_url_results = []
+
+        mock_url = MagicMock()
+        mock_url.analyze.side_effect = [body_result, qr_result]
+        MockUrl.return_value = mock_url
+
+        mock_att = MagicMock()
+        mock_att.analyze.return_value.attachment_score = 0.0
+        mock_att.analyze.return_value.total_files = 1
+        mock_att.analyze.return_value.analyzed_files = 1
+        mock_att.analyze.return_value.high_risk_files = []
+        mock_att.analyze.return_value.per_file_results = [
+            {
+                "filename": "invoice.png",
+                "qr_codes": [
+                    {
+                        "value": "https://qr-entry.example/verify",
+                        "url": "https://qr-entry.example/verify",
+                        "is_url": True,
+                        "kind": "qr",
+                        "format": "QR Code",
+                        "container": "invoice.png",
+                    }
+                ],
+            }
+        ]
+        MockAtt.return_value = mock_att
+
+        email = Email(id=1, body_text="See the QR code", attachments=[])
+        service = ScanService(db)
+        with patch.object(
+            ScanService, "_analyze_headers", return_value=HeaderAnalysisResult(present=True, score=0.0)
+        ):
+            service._execute_pipeline(MagicMock(id=1), email)
+
+        # Second URL-engine call carries the decoded QR URL as an extra input.
+        assert mock_url.analyze.call_count == 2
+        assert mock_url.analyze.call_args.kwargs["extra_urls"] == [
+            "https://qr-entry.example/verify"
+        ]
+
+        verdict = _last_verdict(db)
+        assert verdict.url_score == 75.0
+        assert verdict.breakdown["qr"]["present"] is True
+        assert verdict.breakdown["qr"]["url_count"] == 1
+        assert verdict.breakdown["qr"]["codes"][0]["url"] == (
+            "https://qr-entry.example/verify"
+        )
