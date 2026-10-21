@@ -186,6 +186,51 @@ def claim_next(
     return db.get(JobRun, candidate.id)
 
 
+def claim_job(
+    db: Session,
+    *,
+    job_id: int,
+    worker_id: str,
+    lease_seconds: int = 120,
+    now: Optional[datetime] = None,
+) -> Optional[JobRun]:
+    """Claim one specific queued/lease-expired job (manual worker path).
+
+    ``claim_next`` is the normal queue path.  This variant lets an
+    owner-triggered endpoint execute exactly the job it just created
+    without racing other queued work.
+    """
+    if not worker_id or len(worker_id) > 64:
+        raise ValueError("worker_id must be 1..64 characters")
+    if lease_seconds < 1:
+        raise ValueError("lease_seconds must be positive")
+    now = now or datetime.utcnow()
+    claimable = _claimable(now)
+    updated = (
+        db.query(JobRun)
+        .filter(
+            JobRun.id == job_id,
+            claimable,
+            JobRun.attempts < JobRun.max_attempts,
+        )
+        .update(
+            {
+                JobRun.status: JobStatus.RUNNING,
+                JobRun.lease_owner: worker_id,
+                JobRun.lease_until: now + timedelta(seconds=lease_seconds),
+                JobRun.heartbeat_at: now,
+                JobRun.started_at: now,
+                JobRun.attempts: JobRun.attempts + 1,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    if updated != 1:
+        return None
+    return db.get(JobRun, job_id)
+
+
 def heartbeat(
     db: Session,
     *,
