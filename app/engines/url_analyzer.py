@@ -9,6 +9,24 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
+# Known legitimate CDNs/services that contain brand names as substrings.
+# Shared with the IoC exporter so shared infrastructure is never exported as
+# attacker infrastructure.
+LEGITIMATE_SERVICE_DOMAINS = frozenset({
+    "amazonaws.com", "googleapis.com", "google.com", "cloudfront.net",
+    "akamai.net", "akamaized.net", "fastly.net", "fastly.com",
+    "cloudflare.com", "azure.com", "azurewebsites.net",
+    "github.io", "github.com", "gitlab.io",
+    "s3.amazonaws.com", "console.aws.amazon.com",
+    # Google ccSLDs + shortlinks (google.co.in is Google, not a spoof)
+    "google.co.in", "google.co.uk", "google.com.au",
+    "google.co.jp", "google.de", "google.fr", "c.gle",
+    "goo.gl", "g.co",
+    # Legitimate email click-trackers (marketing redirectors)
+    "awstrack.me", "inflection.io", "pinterest.com",
+    "mailchi.mp", "substack.com",
+})
+
 from bs4 import BeautifulSoup
 
 from app.config import Settings, get_settings
@@ -298,23 +316,9 @@ class UrlAnalyzer:
         is_institutional = any(registered_domain.endswith(tld) for tld in institutional_tlds)
 
         # Known legitimate CDNs/services that contain brand names as substrings
-        brand_whitelist_domains = {
-            "amazonaws.com", "googleapis.com", "google.com", "cloudfront.net",
-            "akamai.net", "akamaized.net", "fastly.net", "fastly.com",
-            "cloudflare.com", "azure.com", "azurewebsites.net",
-            "github.io", "github.com", "gitlab.io",
-            "s3.amazonaws.com", "console.aws.amazon.com",
-            # Google ccSLDs + shortlinks (google.co.in is Google, not a spoof)
-            "google.co.in", "google.co.uk", "google.com.au",
-            "google.co.jp", "google.de", "google.fr", "c.gle",
-            "goo.gl", "g.co",
-            # Legitimate email click-trackers (marketing redirectors)
-            "awstrack.me", "inflection.io", "pinterest.com",
-            "mailchi.mp", "substack.com",
-        }
         is_known_service = any(
             registered_domain == d or registered_domain.endswith(f".{d}")
-            for d in brand_whitelist_domains
+            for d in LEGITIMATE_SERVICE_DOMAINS
         )
 
         # Check 1: HTTP scheme (+15, reduced for institutional / known services)

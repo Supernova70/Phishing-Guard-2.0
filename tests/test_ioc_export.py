@@ -230,8 +230,14 @@ def test_export_stix_and_csv(env):
         iocs=[
             ("origin_ip", "203.0.113.9"),
             ("lookalike_brand", "paypal"),
-            # Low-risk shared infrastructure must not be exported.
+            # Shared infrastructure must not be exported even at high risk.
             ("url_domain", "google.com"),
+            # A genuinely risky third-party domain is exported.
+            ("url_domain", "phish-login.example"),
+        ],
+        url_scores=[
+            ("https://photos.google.com/x", 95.0),
+            ("https://phish-login.example/verify", 88.0),
         ],
     )
     # Indicators from SAFE scans are not threat intelligence.
@@ -255,7 +261,7 @@ def test_export_stix_and_csv(env):
     body = resp.json()
     indicators = [o for o in body["objects"] if o["type"] == "indicator"]
     values = {o["x_phishing_guard"]["value"] for o in indicators}
-    assert values == {"evil.example", "203.0.113.9", "b" * 64}
+    assert values == {"evil.example", "203.0.113.9", "b" * 64, "phish-login.example"}
     assert "other.example" not in values
     assert "legit.example" not in values
     assert "google.com" not in values
