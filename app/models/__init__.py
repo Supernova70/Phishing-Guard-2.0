@@ -37,3 +37,4 @@ from app.models.audit_log import AuditLog  # noqa: F401, E402
 from app.models.alert import Alert  # noqa: F401, E402
 from app.models.user_permission import UserPermission  # noqa: F401, E402
 from app.models.feedback import VerdictFeedback  # noqa: F401, E402
+from app.models.finding import ScanFinding  # noqa: F401, E402
