@@ -36,6 +36,7 @@ from app.engines.correlation.campaign_clustering import (
 )
 from app.engines.correlation.graph_builder import build_graph_from_db
 from app.engines.headers.received_parser import parse_received_chain
+from app.engines.headers.common import registrable_domain
 from app.engines.intel.origin import build_origin_trace
 from app.engines.ioc_export import build_csv, build_stix_bundle
 from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
@@ -44,6 +45,7 @@ from app.models.email import Email
 from app.models.indicator import Indicator
 from app.models.ip_intel import IpIntel
 from app.models.scan import Scan, Verdict
+from app.models.url_result import UrlResult
 from app.models.user import User
 from app.services.ip_intel_service import IpIntelService
 
@@ -497,20 +499,52 @@ def _aggregated_indicator_rows(
 ) -> list[dict]:
     """Aggregate this account's indicators for export (per type+value).
 
+    Only indicators observed in *suspicious or dangerous* scans are
+    exported — a link that appeared in a legitimate email is not threat
+    intelligence. URL domains are additionally gated on the stored URL
+    result score (≥40 or a VirusTotal hit), so shared infrastructure such
+    as `google.com` is never labelled malicious just because a phish
+    contained a Google link.
+
     Aggregation happens in Python so the same code works on PostgreSQL and
     the SQLite test harness; raw rows are capped to keep the endpoint
     bounded even for very large mailboxes.
     """
-    query = db.query(Indicator).filter(Indicator.user_id == user_id)
-    if campaign_id is not None:
-        query = query.join(Scan, Scan.id == Indicator.scan_id).filter(
-            Scan.campaign_id == campaign_id
+    query = (
+        db.query(Indicator)
+        .join(Scan, Scan.id == Indicator.scan_id)
+        .join(Verdict, Verdict.scan_id == Indicator.scan_id)
+        .filter(
+            Indicator.user_id == user_id,
+            Verdict.classification.in_(("suspicious", "dangerous")),
         )
+    )
+    if campaign_id is not None:
+        query = query.filter(Scan.campaign_id == campaign_id)
 
     raw = query.order_by(Indicator.id.desc()).limit(_MAX_RAW_ROWS).all()
 
+    # Domain-level risk from the URL engine (max score across scans).
+    domain_risk: dict[str, float] = {}
+    scan_ids = {row.scan_id for row in raw if row.scan_id is not None}
+    if scan_ids:
+        for url_row in (
+            db.query(UrlResult).filter(UrlResult.scan_id.in_(scan_ids)).all()
+        ):
+            host = registrable_domain(
+                url_row.normalized_url or url_row.original_url or ""
+            )
+            if not host:
+                continue
+            score = float(url_row.final_score or 0.0)
+            if (url_row.vt_malicious or 0) > 0:
+                score = max(score, 100.0)
+            domain_risk[host] = max(domain_risk.get(host, 0.0), score)
+
     agg: dict[tuple, dict] = {}
     for row in raw:
+        if row.type == "url_domain" and domain_risk.get(row.value, 0.0) < 40.0:
+            continue
         key = (row.type, row.value)
         bucket = agg.get(key)
         if bucket is None:

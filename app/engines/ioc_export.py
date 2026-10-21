@@ -144,12 +144,12 @@ def build_stix_bundle(
                 f"({int(row.get('scan_count') or 0)} scan(s), "
                 f"{int(row.get('sighting_count') or 0)} sighting(s))."
             ),
-            "indicator_types": ["malicious-activity"],
+            "indicator_types": ["anomalous-activity"],
             "pattern": pattern,
             "pattern_type": "stix",
             "pattern_version": "2.1",
             "valid_from": first_seen,
-            "labels": ["malicious-activity"],
+            "labels": ["phishing", "suspicious-email"],
             "x_phishing_guard": {
                 "indicator_type": ind_type,
                 "value": value,
