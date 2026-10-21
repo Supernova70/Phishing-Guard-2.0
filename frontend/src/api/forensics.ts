@@ -233,8 +233,20 @@ export interface CampaignMember {
   classification: Classification | null;
 }
 
+export interface CampaignTechnique {
+  id: string;
+  name: string;
+  tactic: string;
+  tactic_id: string;
+  url: string;
+  count: number;
+  scan_ids: number[];
+}
+
 export interface CampaignDetail {
   campaign: Campaign;
+  techniques: CampaignTechnique[];
+  tactics: string[];
   scans: CampaignMember[];
 }
 

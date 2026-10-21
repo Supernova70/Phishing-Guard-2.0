@@ -70,7 +70,7 @@ function CampaignDetailPage() {
     );
   }
 
-  const { campaign, scans } = detail;
+  const { campaign, scans, techniques: attackTechniques = [], tactics = [] } = detail;
   const effectiveNotes = notesDraft ?? campaign.notes ?? '';
 
   const persist = async (patch: { status?: string; notes?: string }) => {
@@ -142,6 +142,47 @@ function CampaignDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ATT&CK coverage across member scans */}
+      {attackTechniques.length > 0 && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              ATT&amp;CK Techniques Observed
+            </p>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              {attackTechniques.length} technique{attackTechniques.length !== 1 ? 's' : ''} · {tactics.length} tactic{tactics.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            {attackTechniques.map((tech) => (
+              <a
+                key={tech.id}
+                href={tech.url}
+                target="_blank"
+                rel="noreferrer"
+                title={`${tech.name} — observed in ${tech.count} scan${tech.count !== 1 ? 's' : ''}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 999,
+                  padding: '4px 10px',
+                  textDecoration: 'none',
+                }}
+              >
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 600 }}>
+                  {tech.id}
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{tech.name}</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>×{tech.count}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Case management: status + notes (plan §5 B4 → FE-C2) */}
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>

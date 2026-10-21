@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText } from 'lucide-react';
-import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary } from '../api/client';
+import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary, type AttackTechnique } from '../api/client';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { ScoreGauge } from '../components/ui/ScoreGauge';
@@ -283,6 +283,13 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
     ? 'var(--danger)' : summary.classification === 'suspicious'
     ? 'var(--warning)' : 'var(--safe)';
 
+  const techniques = summary.techniques ?? [];
+  const byTactic = techniques.reduce<Record<string, AttackTechnique[]>>((acc, tech) => {
+    (acc[tech.tactic] ||= []).push(tech);
+    return acc;
+  }, {});
+  const tacticCount = Object.keys(byTactic).length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -359,6 +366,71 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
               }}>
                 {rf.engine}: {rf.detail}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MITRE ATT&CK Coverage */}
+      {techniques.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              MITRE ATT&amp;CK Coverage
+            </p>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              {techniques.length} technique{techniques.length !== 1 ? 's' : ''} · {tacticCount} tactic{tacticCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {Object.entries(byTactic).map(([tactic, list]) => (
+              <div key={tactic}>
+                <p style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  {tactic}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {list.map((tech) => {
+                    const confColor = tech.confidence === 'high'
+                      ? 'var(--primary)'
+                      : tech.confidence === 'medium'
+                      ? 'var(--warning)'
+                      : 'var(--text-muted)';
+                    return (
+                      <div key={tech.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <a
+                            href={tech.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.72rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}
+                          >
+                            {tech.id} ↗
+                          </a>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>{tech.name}</span>
+                          <span style={{
+                            marginLeft: 'auto',
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            color: confColor,
+                            border: `1px solid ${confColor}`,
+                            borderRadius: 999,
+                            padding: '1px 7px',
+                          }}>
+                            {tech.confidence}
+                          </span>
+                        </div>
+                        {tech.evidence.slice(0, 3).map((line, i) => (
+                          <p key={i} style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 4, paddingLeft: 2 }}>
+                            • {line}
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>
