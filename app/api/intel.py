@@ -40,6 +40,7 @@ from app.engines.headers.common import registrable_domain
 from app.engines.intel.origin import build_origin_trace
 from app.engines.ioc_export import build_csv, build_stix_bundle
 from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
+from app.engines.url_analyzer import LEGITIMATE_SERVICE_DOMAINS
 from app.models.campaign import Campaign
 from app.models.email import Email
 from app.models.indicator import Indicator
@@ -489,6 +490,17 @@ async def list_indicators(
 MAX_EXPORT_ROWS = 5000
 _MAX_RAW_ROWS = 20000
 
+_DOMAIN_INDICATOR_TYPES = {"sender_domain", "replyto_domain", "url_domain"}
+
+
+def _is_shared_service_domain(value: str) -> bool:
+    """True for legitimate shared infrastructure (Google, GitHub, CDNs...)."""
+    domain = registrable_domain(f"https://{value}") or (value or "").lower()
+    return any(
+        domain == trusted or domain.endswith(f".{trusted}")
+        for trusted in LEGITIMATE_SERVICE_DOMAINS
+    )
+
 
 def _aggregated_indicator_rows(
     db: Session,
@@ -502,7 +514,7 @@ def _aggregated_indicator_rows(
     Only indicators observed in *suspicious or dangerous* scans are
     exported — a link that appeared in a legitimate email is not threat
     intelligence. URL domains are additionally gated on the stored URL
-    result score (≥40 or a VirusTotal hit), so shared infrastructure such
+    result score (≥60 or a VirusTotal hit), so shared infrastructure such
     as `google.com` is never labelled malicious just because a phish
     contained a Google link.
 
@@ -543,7 +555,9 @@ def _aggregated_indicator_rows(
 
     agg: dict[tuple, dict] = {}
     for row in raw:
-        if row.type == "url_domain" and domain_risk.get(row.value, 0.0) < 40.0:
+        if row.type in _DOMAIN_INDICATOR_TYPES and _is_shared_service_domain(row.value):
+            continue
+        if row.type == "url_domain" and domain_risk.get(row.value, 0.0) < 60.0:
             continue
         key = (row.type, row.value)
         bucket = agg.get(key)
