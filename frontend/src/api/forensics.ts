@@ -388,3 +388,74 @@ export const markAllAlertsRead = async (): Promise<{ marked: number }> => {
   const { data } = await apiClient.post<{ marked: number }>('/alerts/read-all');
   return data;
 };
+
+// ─── Evidence chain + audit trail ────────────────────────────────────────────
+
+export interface EvidenceEntry {
+  id: number;
+  email_id: number | null;
+  scan_id: number | null;
+  raw_sha256: string | null;
+  report_sha256: string | null;
+  created_at: string | null;
+  actor: string;
+  prev_hash: string;
+  row_hash: string;
+}
+
+export interface ChainStatus {
+  valid: boolean;
+  checked: number;
+  broken_id: number | null;
+  reason: string | null;
+}
+
+export interface EvidenceVerifyResult {
+  evidence: EvidenceEntry;
+  row_hash_ok: boolean;
+  link_ok: boolean;
+  chain: ChainStatus;
+  valid: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  created_at: string | null;
+  actor: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: number | null;
+  detail: Record<string, unknown> | null;
+}
+
+export const getEvidence = async (limit = 100): Promise<EvidenceEntry[]> => {
+  const { data } = await apiClient.get<{ count: number; evidence: EvidenceEntry[] }>(
+    '/evidence',
+    { params: { limit } },
+  );
+  return data.evidence ?? [];
+};
+
+export const verifyEvidence = async (id: number): Promise<EvidenceVerifyResult> => {
+  const { data } = await apiClient.get<EvidenceVerifyResult>(`/evidence/${id}/verify`);
+  return data;
+};
+
+export const getAuditLog = async (action?: string, limit = 150): Promise<AuditEntry[]> => {
+  const { data } = await apiClient.get<{ count: number; entries: AuditEntry[] }>('/audit', {
+    params: { ...(action ? { action } : {}), limit },
+  });
+  return data.entries ?? [];
+};
+
+export const AUDIT_ACTIONS = [
+  'raw_view',
+  'evidence_verify',
+  'evidence_download',
+  'report_export',
+  'retention_purge',
+  'evidence_append',
+] as const;
+
+export const evidenceRawUrl = (emailId: number): string =>
+  `/api/emails/${emailId}/evidence/raw`;
