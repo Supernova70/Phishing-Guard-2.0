@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText } from 'lucide-react';
+import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode } from 'lucide-react';
 import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary, type AttackTechnique } from '../api/client';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
@@ -734,6 +734,54 @@ export function ScanDetail() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Quishing (QR codes hidden in attachments) */}
+          {bd?.qr?.present && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <QrCode size={16} style={{ color: 'var(--primary)' }} />
+                <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Quishing — QR / barcode payloads
+                </p>
+                <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 4 }}>
+                  {bd.qr.code_count} symbol{bd.qr.code_count === 1 ? '' : 's'} ·{' '}
+                  {bd.qr.url_count} URL{bd.qr.url_count === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {bd.qr.codes.map((code, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 6,
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {code.format} · {code.container}
+                        {code.page ? ` · page ${code.page}` : ''}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: code.is_url ? 'var(--warning)' : 'var(--text-muted)' }}>
+                        {code.is_url ? 'URL payload' : 'non-URL payload'}
+                      </span>
+                    </div>
+                    <p className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                      {code.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 10 }}>
+                Decoded URLs are scored by the URL engine and included in the URL score
+                {bd.qr.score > 0 ? ` (max ${Math.round(bd.qr.score)})` : ''}.
+              </p>
             </div>
           )}
 

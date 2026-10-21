@@ -60,6 +60,37 @@ export interface ScanTriggerResponse {
   verdict: null;
 }
 
+export interface QrCodeInfo {
+  value: string;
+  format: string;
+  kind: 'qr' | 'barcode' | string;
+  container: string;
+  page?: number;
+  is_url: boolean;
+  url?: string;
+}
+
+export interface QrUrlAnalysis {
+  url: string;
+  final_url?: string | null;
+  score: number;
+  heuristic_score: number;
+  vt_malicious: number;
+  vt_total: number;
+  flags: string[];
+}
+
+export interface QrScanResult {
+  filename: string;
+  size_bytes: number;
+  code_count: number;
+  codes: QrCodeInfo[];
+  urls: string[];
+  url_analysis: QrUrlAnalysis[];
+  max_url_score: number;
+  note?: string | null;
+}
+
 export interface Verdict {
   id: number;
   scan_id: number;
@@ -157,6 +188,8 @@ export interface ScanBreakdown {
         evidence?: string[];
       }>;
       embedded_urls?: string[];
+      // Quishing: barcodes decoded from images/PDFs by the attachment engine
+      qr_codes?: QrCodeInfo[];
       // VirusTotal hash lookup results
       sha256?: string;
       vt_malicious?: number;
@@ -165,6 +198,14 @@ export interface ScanBreakdown {
       vt_total?: number;
       vt_error?: string | null;
     }>;
+  };
+  qr?: {
+    present: boolean;
+    code_count: number;
+    url_count: number;
+    codes: QrCodeInfo[];
+    score: number;
+    high_risk_urls: string[];
   };
   header?: {
     score: number;

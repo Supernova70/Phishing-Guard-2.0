@@ -17,6 +17,7 @@ const PAGE_CONFIG: Record<string, { title: string; breadcrumbs: Array<{ label: s
   '/attachments': { title: 'Attachments', breadcrumbs: [{ label: 'Analyze' }, { label: 'Attachments' }] },
   '/graph': { title: 'Attribution Graph', breadcrumbs: [{ label: 'Analyze' }, { label: 'Attribution Graph' }] },
   '/campaigns': { title: 'Campaigns', breadcrumbs: [{ label: 'Analyze' }, { label: 'Campaigns' }] },
+  '/compliance': { title: 'Evidence & Audit', breadcrumbs: [{ label: 'Analyze' }, { label: 'Evidence & Audit' }] },
   '/alerts': { title: 'Alerts', breadcrumbs: [{ label: 'Monitor' }, { label: 'Alerts' }] },
   '/system-health': { title: 'API Health', breadcrumbs: [{ label: 'System' }, { label: 'API Health' }] },
   '/settings': { title: 'Settings', breadcrumbs: [{ label: 'System' }, { label: 'Settings' }] },
