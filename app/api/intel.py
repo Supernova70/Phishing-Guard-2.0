@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -36,6 +37,7 @@ from app.engines.correlation.campaign_clustering import (
 from app.engines.correlation.graph_builder import build_graph_from_db
 from app.engines.headers.received_parser import parse_received_chain
 from app.engines.intel.origin import build_origin_trace
+from app.engines.ioc_export import build_csv, build_stix_bundle
 from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
 from app.models.campaign import Campaign
 from app.models.email import Email
@@ -478,6 +480,114 @@ async def list_indicators(
         for r in rows
     ]
     return {"count": len(payload), "indicators": payload}
+
+
+# ── IoC export (STIX 2.1 / CSV) ─────────────────────────────────────────
+
+MAX_EXPORT_ROWS = 5000
+_MAX_RAW_ROWS = 20000
+
+
+def _aggregated_indicator_rows(
+    db: Session,
+    user_id: int,
+    *,
+    campaign_id: Optional[int] = None,
+    limit: int = MAX_EXPORT_ROWS,
+) -> list[dict]:
+    """Aggregate this account's indicators for export (per type+value).
+
+    Aggregation happens in Python so the same code works on PostgreSQL and
+    the SQLite test harness; raw rows are capped to keep the endpoint
+    bounded even for very large mailboxes.
+    """
+    query = db.query(Indicator).filter(Indicator.user_id == user_id)
+    if campaign_id is not None:
+        query = query.join(Scan, Scan.id == Indicator.scan_id).filter(
+            Scan.campaign_id == campaign_id
+        )
+
+    raw = query.order_by(Indicator.id.desc()).limit(_MAX_RAW_ROWS).all()
+
+    agg: dict[tuple, dict] = {}
+    for row in raw:
+        key = (row.type, row.value)
+        bucket = agg.get(key)
+        if bucket is None:
+            bucket = {
+                "type": row.type,
+                "value": row.value,
+                "scan_ids": set(),
+                "sighting_count": 0,
+                "first_seen": row.first_seen,
+                "last_seen": row.last_seen,
+            }
+            agg[key] = bucket
+        if row.scan_id is not None:
+            bucket["scan_ids"].add(row.scan_id)
+        bucket["sighting_count"] += int(row.sighting_count or 1)
+        if row.first_seen and (
+            bucket["first_seen"] is None or row.first_seen < bucket["first_seen"]
+        ):
+            bucket["first_seen"] = row.first_seen
+        if row.last_seen and (
+            bucket["last_seen"] is None or row.last_seen > bucket["last_seen"]
+        ):
+            bucket["last_seen"] = row.last_seen
+
+    rows = [
+        {
+            "type": bucket["type"],
+            "value": bucket["value"],
+            "scan_count": len(bucket["scan_ids"]),
+            "sighting_count": bucket["sighting_count"],
+            "first_seen": bucket["first_seen"],
+            "last_seen": bucket["last_seen"],
+        }
+        for bucket in agg.values()
+    ]
+    rows.sort(key=lambda r: (-r["scan_count"], r["type"], r["value"]))
+    return rows[:limit]
+
+
+@router.get("/export/stix")
+async def export_stix(
+    campaign_id: Optional[int] = Query(None, description="Restrict to one campaign"),
+    limit: int = Query(MAX_EXPORT_ROWS, ge=1, le=MAX_EXPORT_ROWS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Download this account's IoCs as a STIX 2.1 bundle."""
+    rows = _aggregated_indicator_rows(
+        db, user.id, campaign_id=campaign_id, limit=limit
+    )
+    bundle = build_stix_bundle(rows)
+    return JSONResponse(
+        content=bundle,
+        headers={
+            "Content-Disposition": 'attachment; filename="phishing-guard-iocs.stix2.json"'
+        },
+    )
+
+
+@router.get("/export/csv")
+async def export_indicators_csv(
+    campaign_id: Optional[int] = Query(None, description="Restrict to one campaign"),
+    limit: int = Query(MAX_EXPORT_ROWS, ge=1, le=MAX_EXPORT_ROWS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Download this account's IoCs as CSV."""
+    rows = _aggregated_indicator_rows(
+        db, user.id, campaign_id=campaign_id, limit=limit
+    )
+    return Response(
+        content=build_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="phishing-guard-iocs.csv"'
+        },
+    )
 
 
 @router.get("/graph")
