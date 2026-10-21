@@ -36,6 +36,7 @@ from app.engines.correlation.campaign_clustering import (
 from app.engines.correlation.graph_builder import build_graph_from_db
 from app.engines.headers.received_parser import parse_received_chain
 from app.engines.intel.origin import build_origin_trace
+from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
 from app.models.campaign import Campaign
 from app.models.email import Email
 from app.models.indicator import Indicator
@@ -582,8 +583,23 @@ async def get_campaign(
         .order_by(Verdict.final_score.desc())
         .all()
     )
+
+    technique_inputs = []
+    for scan, verdict, _email in members:
+        techniques = map_attack_techniques(
+            (verdict.breakdown or {}) if verdict else {},
+            final_score=verdict.final_score if verdict else 0.0,
+            classification=verdict.classification if verdict else None,
+        )
+        if techniques:
+            technique_inputs.append((scan.id, techniques))
+
+    aggregated = aggregate_techniques(technique_inputs)
+
     return {
         "campaign": campaign.to_dict(),
+        "techniques": aggregated,
+        "tactics": summarize_tactics(aggregated),
         "scans": [
             {
                 "scan_id": scan.id,

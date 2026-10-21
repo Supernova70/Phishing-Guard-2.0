@@ -13,11 +13,12 @@ from typing import AsyncGenerator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, selectinload
 
 from app.dependencies import SessionLocal, get_current_user, get_db, owned_or_404
 from app.api.email import email_numbers
+from app.engines.mitre import map_attack_techniques, summarize_tactics
 from app.models.email import Email
 from app.models.indicator import Indicator
 from app.models.scan import Scan, ScanStatus, Verdict
@@ -288,6 +289,8 @@ class ThreatSummaryResponse(BaseModel):
     summary: str
     key_findings: list[str]
     risk_factors: list[dict]
+    # Evidence-backed MITRE ATT&CK mapping (empty for SAFE verdicts).
+    techniques: list[dict] = Field(default_factory=list)
 
 
 def _generate_threat_summary(scan: Scan) -> dict:
@@ -298,6 +301,7 @@ def _generate_threat_summary(scan: Scan) -> dict:
             "summary": "No analysis results available.",
             "key_findings": [],
             "risk_factors": [],
+            "techniques": [],
         }
 
     bd = verdict.breakdown or {}
@@ -439,6 +443,11 @@ def _generate_threat_summary(scan: Scan) -> dict:
         "summary": " ".join(summary_parts),
         "key_findings": findings,
         "risk_factors": risk_factors,
+        "techniques": map_attack_techniques(
+            bd,
+            final_score=score,
+            classification=classification,
+        ),
     }
 
 
@@ -476,7 +485,47 @@ async def get_threat_summary(
         summary=result["summary"],
         key_findings=result["key_findings"],
         risk_factors=result["risk_factors"],
+        techniques=result["techniques"],
     )
+
+
+@router.get("/{scan_id}/mitre")
+async def get_scan_mitre(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Evidence-backed MITRE ATT&CK mapping for one completed scan.
+
+    Derived on read from the stored verdict breakdown, so historical scans
+    are mapped without re-scanning; SAFE verdicts return an empty list.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+
+    if scan.status != ScanStatus.COMPLETE.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scan is not complete (status: {scan.status})",
+        )
+
+    verdict = scan.verdict
+    if not verdict:
+        raise HTTPException(status_code=404, detail="No verdict available")
+
+    techniques = map_attack_techniques(
+        verdict.breakdown or {},
+        final_score=verdict.final_score,
+        classification=verdict.classification,
+    )
+    return {
+        "scan_id": scan.id,
+        "classification": verdict.classification,
+        "final_score": verdict.final_score,
+        "techniques": techniques,
+        "technique_count": len(techniques),
+        "tactics": summarize_tactics(techniques),
+    }
 
 
 @router.get("/{scan_id}/attribution")

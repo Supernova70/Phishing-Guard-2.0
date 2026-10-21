@@ -118,6 +118,18 @@ export const bulkScan = async (emailIds: number[]): Promise<BulkScanResponse> =>
 
 // ─── AI Threat Summary ────────────────────────────────────────────────────────
 
+export interface AttackTechnique {
+  id: string;
+  name: string;
+  tactic: string;
+  tactic_id: string;
+  url: string;
+  confidence: 'high' | 'medium' | 'low';
+  weight: number;
+  evidence: string[];
+  sources: string[];
+}
+
 export interface ThreatSummary {
   scan_id: number;
   classification: string;
@@ -125,6 +137,7 @@ export interface ThreatSummary {
   summary: string;
   key_findings: string[];
   risk_factors: { engine: string; severity: string; detail: string }[];
+  techniques: AttackTechnique[];
 }
 
 export const getThreatSummary = async (scanId: number): Promise<ThreatSummary> => {
