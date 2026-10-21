@@ -233,36 +233,6 @@ class ScanService:
                     "Identity analysis failed for email %s: %s", email.id, exc
                 )
 
-            # ── 3c. Kit / AiTM fingerprinting (shadow) ───────────
-            kit_result = None
-            try:
-                from app.engines.kit import KitContext, UrlSignal, analyze_kit
-                from app.services.finding_service import persist_analyzer_result
-
-                kit_result = analyze_kit(
-                    KitContext(
-                        subject=email.subject or "",
-                        body_html=body_html,
-                        body_text=body_text,
-                        sender_domain=domain_of(email.sender) if email.sender else None,
-                        urls=tuple(
-                            UrlSignal(
-                                original_url=item.original_url,
-                                final_url=item.final_url,
-                                redirect_chain=tuple(item.redirect_chain or ()),
-                                dom_has_login_form=bool(item.dom_has_login_form),
-                                external_form_action=bool(item.external_form_action),
-                                dynamic_flags=tuple(item.dynamic_flags or ()),
-                                dynamic_score=float(item.dynamic_score or 0.0),
-                            )
-                            for item in url_result.per_url_results
-                        ),
-                    )
-                )
-                persist_analyzer_result(self.db, scan, kit_result, commit=False)
-            except Exception as exc:  # kit layer must never fail a scan
-                logger.error("Kit analysis failed for email %s: %s", email.id, exc)
-
             # ── 3. Attachment Analysis ────────────────────────────
             attachment_analyzer = AttachmentAnalyzer()
             att_result = attachment_analyzer.analyze(email.attachments)
@@ -323,6 +293,55 @@ class ScanService:
                     if qr_lookalike.score > lk_result.score:
                         lk_result.score = qr_lookalike.score
                         lk_result.matched_brand = qr_lookalike.matched_brand
+
+            # ── 3c. Kit / AiTM fingerprinting (shadow) ───────────
+            kit_result = None
+            try:
+                from app.engines.kit import KitContext, UrlSignal, analyze_kit
+                from app.services.finding_service import persist_analyzer_result
+
+                kit_result = analyze_kit(
+                    KitContext(
+                        subject=email.subject or "",
+                        body_html=body_html,
+                        body_text=body_text,
+                        sender_domain=domain_of(email.sender) if email.sender else None,
+                        urls=tuple(
+                            UrlSignal(
+                                original_url=item.original_url,
+                                final_url=item.final_url,
+                                redirect_chain=tuple(item.redirect_chain or ()),
+                                dom_has_login_form=bool(item.dom_has_login_form),
+                                external_form_action=bool(item.external_form_action),
+                                dynamic_flags=tuple(item.dynamic_flags or ()),
+                                dynamic_score=float(item.dynamic_score or 0.0),
+                            )
+                            for item in url_result.per_url_results
+                        ),
+                    )
+                )
+                persist_analyzer_result(self.db, scan, kit_result, commit=False)
+            except Exception as exc:  # kit layer must never fail a scan
+                logger.error("Kit analysis failed for email %s: %s", email.id, exc)
+
+            # ── 3d. ClickFix / clipboard-hijack (shadow) ──────────
+            clickfix_result = None
+            try:
+                from app.engines.clickfix import ClickFixContext, analyze_clickfix
+                from app.services.finding_service import persist_analyzer_result
+
+                clickfix_result = analyze_clickfix(
+                    ClickFixContext(
+                        subject=email.subject or "",
+                        body_html=body_html,
+                        body_text=body_text,
+                    )
+                )
+                persist_analyzer_result(self.db, scan, clickfix_result, commit=False)
+            except Exception as exc:  # ClickFix layer must never fail a scan
+                logger.error(
+                    "ClickFix analysis failed for email %s: %s", email.id, exc
+                )
 
             # Combined AI signal: strongest of ML / BEC / lookalike
             # (ML label stays authoritative; flags record other drivers).
@@ -554,6 +573,19 @@ class ScanService:
                             ],
                         }
                         if kit_result is not None
+                        else {"shadow": True, "status": "error", "finding_count": 0}
+                    ),
+                    "clickfix": (
+                        {
+                            "shadow": True,
+                            "status": clickfix_result.status,
+                            "score": round(clickfix_result.risk_score, 1),
+                            "finding_count": len(clickfix_result.findings),
+                            "codes": [
+                                finding.code for finding in clickfix_result.findings
+                            ],
+                        }
+                        if clickfix_result is not None
                         else {"shadow": True, "status": "error", "finding_count": 0}
                     ),
                 },
