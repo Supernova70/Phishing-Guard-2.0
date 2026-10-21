@@ -69,3 +69,13 @@ def owned_or_404(obj, user: User):
     if obj is None or getattr(obj, "user_id", None) != user.id:
         raise HTTPException(status_code=404, detail="Not found")
     return obj
+
+
+def get_artifact_store():
+    """Configured content-addressed artifact store."""
+    from app.services.artifact_service import ArtifactStore
+
+    return ArtifactStore(
+        settings.artifact_dir,
+        max_bytes=settings.ARTIFACT_MAX_BYTES,
+    )

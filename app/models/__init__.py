@@ -39,3 +39,4 @@ from app.models.user_permission import UserPermission  # noqa: F401, E402
 from app.models.feedback import VerdictFeedback  # noqa: F401, E402
 from app.models.finding import ScanFinding  # noqa: F401, E402
 from app.models.job import JobRun  # noqa: F401, E402
+from app.models.artifact import Artifact  # noqa: F401, E402

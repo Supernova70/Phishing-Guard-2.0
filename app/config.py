@@ -107,6 +107,13 @@ class Settings(BaseSettings):
     # Files exceeding this are skipped and flagged in the breakdown.
     MAX_ATTACHMENT_BYTES: int = 52_428_800  # 50 MB
 
+    # ── Artifact store + safe fetch (Phase 0C) ───────────
+    ARTIFACT_DIR: str = ""
+    ARTIFACT_MAX_BYTES: int = 25 * 1024 * 1024
+    SAFE_FETCH_MAX_BYTES: int = 5 * 1024 * 1024
+    SAFE_FETCH_TIMEOUT_SECONDS: float = 10.0
+    SAFE_FETCH_MAX_REDIRECTS: int = 5
+
     # Set to True once app/integrations/virustotal.py is wired up.
     # When False, attachment analysis runs static-only (no VT hash lookups).
     ENABLE_VT_HASH_LOOKUP: bool = False
@@ -155,6 +162,11 @@ class Settings(BaseSettings):
         return os.path.join(self.ATTACHMENT_DIR, "raw_emails")
 
     RAW_EMAIL_DIR: str = ""
+
+    @property
+    def artifact_dir(self) -> str:
+        """Content-addressed artifact root, inside the writable uploads volume."""
+        return self.ARTIFACT_DIR or os.path.join(self.ATTACHMENT_DIR, "artifacts")
 
     model_config = {
         "env_file": ".env",

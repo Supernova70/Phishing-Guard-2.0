@@ -16,6 +16,7 @@ from app.api.users import router as users_router
 from app.api.feedback import router as feedback_router
 from app.api.search import router as search_router
 from app.api.jobs import router as jobs_router
+from app.api.artifacts import router as artifacts_router
 
 api_router = APIRouter()
 
@@ -33,3 +34,4 @@ api_router.include_router(users_router)
 api_router.include_router(feedback_router)
 api_router.include_router(search_router)
 api_router.include_router(jobs_router)
+api_router.include_router(artifacts_router)
