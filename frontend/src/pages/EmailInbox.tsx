@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -533,7 +533,7 @@ export function EmailInbox() {
   const [bulkScanning, setBulkScanning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ queued: number; done: number } | null>(null);
 
-  const loadEmails = async (opts?: { quiet?: boolean }) => {
+  const loadEmails = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
     try {
       const data = await getEmails(0, 100);
@@ -544,13 +544,15 @@ export function EmailInbox() {
         return dateB - dateA; // descending — newest first
       });
       setEmails(sorted);
-      if (!opts?.quiet && sorted.length > 0 && !selectedId) setSelectedId(sorted[0].id);
+      if (!opts?.quiet && sorted.length > 0) {
+        setSelectedId((prev) => prev ?? sorted[0].id);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       if (!opts?.quiet) setLoading(false);
     }
-  };
+  }, []);
 
   const handleFetch = async () => {
     setFetching(true);
@@ -599,7 +601,7 @@ export function EmailInbox() {
     }
   };
 
-  useEffect(() => { loadEmails(); }, []);
+  useEffect(() => { void loadEmails(); }, [loadEmails]);
 
   // Keep scan-status chips fresh while background scans are queued/running.
   const hasActiveScans = emails.some(
@@ -609,8 +611,7 @@ export function EmailInbox() {
     if (!hasActiveScans) return;
     const t = setInterval(() => { void loadEmails({ quiet: true }); }, 4000);
     return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasActiveScans]);
+  }, [hasActiveScans, loadEmails]);
 
   const filtered = useMemo(() => {
     let list = emails;
