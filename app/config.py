@@ -136,6 +136,13 @@ class Settings(BaseSettings):
     DOMAIN_INTEL_DNS_ENABLED: bool = False
     DOMAIN_INTEL_RDAP_ENABLED: bool = False
 
+    # ── Durable background jobs (Phase 0B) ───────────────
+    # Off until a feature registers handlers. Jobs are claimed with a
+    # DB lease, so multiple uvicorn workers can share the queue safely.
+    JOB_WORKER_ENABLED: bool = False
+    JOB_POLL_SECONDS: float = 1.0
+    JOB_LEASE_SECONDS: int = 120
+
     # ── Privacy / compliance ─────────────────────────────
     MASK_PII: bool = False
     RETENTION_DAYS: int = 90
