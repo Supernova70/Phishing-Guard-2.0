@@ -89,7 +89,7 @@ export function AlertBell() {
   const openAlert = (a: AlertItem) => {
     if (!a.read) void handleRead(a.id);
     setOpen(false);
-    navigate(`/scans/${a.scan_id}`);
+    navigate(a.url ?? (a.scan_id != null ? `/scans/${a.scan_id}` : '/alerts'));
   };
 
   return (
