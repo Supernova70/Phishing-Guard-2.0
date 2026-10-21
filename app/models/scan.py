@@ -57,6 +57,9 @@ class Scan(Base):
     url_results: Mapped[List["UrlResult"]] = relationship(  # type: ignore[name-defined]
         back_populates="scan", cascade="all, delete-orphan"
     )
+    findings: Mapped[List["ScanFinding"]] = relationship(  # type: ignore[name-defined]
+        back_populates="scan", cascade="all, delete-orphan"
+    )
 
     def to_dict(self) -> dict:
         return {
