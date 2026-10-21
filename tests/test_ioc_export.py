@@ -240,12 +240,18 @@ def test_export_stix_and_csv(env):
             ("https://phish-login.example/verify", 88.0),
         ],
     )
-    # Indicators from SAFE scans are not threat intelligence.
+    # Indicators from SAFE / SUSPICIOUS scans are not threat intelligence.
     _seed_scan(
         db,
         mid="m2-safe",
         classification="safe",
         iocs=[("sender_domain", "legit.example")],
+    )
+    _seed_scan(
+        db,
+        mid="m2-suspicious",
+        classification="suspicious",
+        iocs=[("sender_domain", "suspicious.example")],
     )
     # Another tenant's IoC must never leak into the export.
     _seed_scan(
@@ -265,6 +271,7 @@ def test_export_stix_and_csv(env):
     assert "other.example" not in values
     assert "legit.example" not in values
     assert "google.com" not in values
+    assert "suspicious.example" not in values
 
     scoped = env["client"].get(
         "/export/stix", params={"campaign_id": campaign.id}

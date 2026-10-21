@@ -40,6 +40,7 @@ from app.engines.headers.common import registrable_domain
 from app.engines.intel.origin import build_origin_trace
 from app.engines.ioc_export import build_csv, build_stix_bundle
 from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
+from app.engines.lookalike import KNOWN_REGISTRABLE_LABELS, LEGIT_EMBEDDED
 from app.engines.url_analyzer import LEGITIMATE_SERVICE_DOMAINS
 from app.models.campaign import Campaign
 from app.models.email import Email
@@ -494,8 +495,11 @@ _DOMAIN_INDICATOR_TYPES = {"sender_domain", "replyto_domain", "url_domain"}
 
 
 def _is_shared_service_domain(value: str) -> bool:
-    """True for legitimate shared infrastructure (Google, GitHub, CDNs...)."""
+    """True for domains an attacker cannot own (brand-owned / shared infra)."""
     domain = registrable_domain(f"https://{value}") or (value or "").lower()
+    label = domain.split(".")[0]
+    if label in KNOWN_REGISTRABLE_LABELS or label in LEGIT_EMBEDDED:
+        return True
     return any(
         domain == trusted or domain.endswith(f".{trusted}")
         for trusted in LEGITIMATE_SERVICE_DOMAINS
@@ -511,8 +515,7 @@ def _aggregated_indicator_rows(
 ) -> list[dict]:
     """Aggregate this account's indicators for export (per type+value).
 
-    Only indicators observed in *suspicious or dangerous* scans are
-    exported — a link that appeared in a legitimate email is not threat
+    Only indicators observed in *dangerous* scans are exported — a link that appeared in a legitimate email is not threat
     intelligence. URL domains are additionally gated on the stored URL
     result score (≥60 or a VirusTotal hit), so shared infrastructure such
     as `google.com` is never labelled malicious just because a phish
@@ -528,7 +531,7 @@ def _aggregated_indicator_rows(
         .join(Verdict, Verdict.scan_id == Indicator.scan_id)
         .filter(
             Indicator.user_id == user_id,
-            Verdict.classification.in_(("suspicious", "dangerous")),
+            Verdict.classification == "dangerous",
         )
     )
     if campaign_id is not None:
