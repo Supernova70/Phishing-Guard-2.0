@@ -330,3 +330,65 @@ class TestPiiMasking:
         assert data["report"]["email"]["sender"] == "I***@paypa1-secure.com>"
         assert data["report"]["email"]["to"] == "a***@example.com"
         assert data["report"]["origin"]["ip"] == "203.0.113.x"
+
+
+# ── Chain append serialisation + fork repair ────────────────────────────
+
+
+def _chain_db(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path}/chain.db")
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+def test_sequential_appends_link_to_previous_tip(tmp_path):
+    db = _chain_db(tmp_path)
+    first = append_evidence(db, email_id=1, scan_id=1, raw_sha256="a" * 64)
+    db.commit()
+    second = append_evidence(db, email_id=2, scan_id=2, raw_sha256="b" * 64)
+    db.commit()
+
+    assert first.prev_hash == GENESIS_HASH
+    assert second.prev_hash == first.row_hash
+    assert verify_chain(db)["valid"] is True
+
+
+def test_repair_reanchors_a_fork_without_touching_content(tmp_path):
+    from scripts.repair_evidence_chain import repair
+
+    db = _chain_db(tmp_path)
+    rows = []
+    for i in range(3):
+        rows.append(
+            append_evidence(db, email_id=i + 1, scan_id=i + 1, raw_sha256=f"{i}" * 64)
+        )
+        db.commit()
+
+    # Simulate the historical race: row 3 points at row 1's hash.
+    from app.services.evidence_service import _recompute
+
+    rows[2].prev_hash = rows[0].row_hash
+    rows[2].row_hash = _recompute(rows[2])
+    db.commit()
+    assert verify_chain(db)["valid"] is False
+
+    assert repair(db, apply=True) == 0
+    db.expire_all()
+
+    assert verify_chain(db)["valid"] is True
+    assert db.get(EvidenceChain, rows[2].id).raw_sha256 == "2" * 64
+    assert db.query(AuditLog).filter_by(action="evidence_rechain").count() == 1
+
+
+def test_repair_aborts_on_content_tampering(tmp_path):
+    from scripts.repair_evidence_chain import repair
+
+    db = _chain_db(tmp_path)
+    row = append_evidence(db, email_id=1, scan_id=1, raw_sha256="a" * 64)
+    db.commit()
+    row.raw_sha256 = "f" * 64  # content edit without re-hashing
+    db.commit()
+
+    assert repair(db, apply=True) == 2
+    db.expire_all()
+    assert db.get(EvidenceChain, row.id).raw_sha256 == "f" * 64

@@ -24,6 +24,7 @@ AUDIT_ACTIONS = (
     "evidence_verify",
     "retention_purge",
     "evidence_append",
+    "evidence_rechain",
 )
 
 

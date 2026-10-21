@@ -14,11 +14,24 @@ import hashlib
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.evidence import EvidenceChain
 
 GENESIS_HASH = "0" * 64
+
+# Serialises chain appends at the database level. Without it, two scans
+# that finish at the same time both read the same tip and fork the chain
+# (observed in production: rows 108/109 shared one prev_hash).
+_APPEND_LOCK_KEY = 741_920_455
+
+
+def _serialise_append(db: Session) -> None:
+    """Take a transaction-scoped advisory lock before reading the tip."""
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _APPEND_LOCK_KEY})
 
 # ── audit helpers (kept here so compliance writes live together) ──────
 from app.models.audit_log import AuditLog  # noqa: E402
@@ -77,6 +90,9 @@ def append_evidence(
     the hashed payload so existing chain rows stay verifiable.
     """
     now = now or datetime.utcnow()
+    # Serialise tip selection + insert so concurrent scans cannot fork the
+    # chain. The lock is released when the caller commits/rolls back.
+    _serialise_append(db)
     prev = chain_tip_hash(db)
     row = EvidenceChain(
         user_id=user_id,
