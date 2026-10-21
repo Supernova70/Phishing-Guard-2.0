@@ -145,6 +145,86 @@ export const getThreatSummary = async (scanId: number): Promise<ThreatSummary> =
   return data;
 };
 
+// ─── Extended findings + conversation (Phase 1) ──────────────────────────────
+
+export interface FindingEvidence {
+  kind: string;
+  value: string;
+  source: string | null;
+  artifact_sha256: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface ScanFinding {
+  id: number;
+  scan_id: number;
+  analyzer: string;
+  analyzer_version: string;
+  ruleset_version: string;
+  category: string;
+  code: string;
+  title: string;
+  severity: number;
+  confidence: number;
+  evidence_hash: string;
+  evidence: FindingEvidence[];
+  details: Record<string, unknown>;
+  created_at: string | null;
+}
+
+export interface ConversationMetadata {
+  shadow: boolean;
+  status: string;
+  score: number;
+  finding_count: number;
+  prior_messages: number;
+  thread_key: string;
+  normalized_subject: string;
+  codes: string[];
+}
+
+export interface ScanFindingsResponse {
+  scan_id: number;
+  count: number;
+  findings: ScanFinding[];
+  conversation: ConversationMetadata | null;
+}
+
+export interface ThreadMessage {
+  email_id: number;
+  message_id: string;
+  sender: string;
+  subject: string;
+  date: string | null;
+  in_reply_to: string | null;
+  has_attachments: boolean;
+  is_current: boolean;
+}
+
+export interface ScanThreadResponse {
+  scan_id: number;
+  thread_key: string;
+  normalized_subject: string;
+  count: number;
+  messages: ThreadMessage[];
+  findings: ScanFinding[];
+}
+
+export const getScanFindings = async (
+  scanId: number,
+  category?: string,
+): Promise<ScanFindingsResponse> => {
+  const { data } = await apiClient.get<ScanFindingsResponse>(`/scans/${scanId}/findings`, {
+    params: category ? { category } : {},
+  });
+  return data;
+};
+
+export const getScanThread = async (scanId: number): Promise<ScanThreadResponse> => {
+  const { data } = await apiClient.get<ScanThreadResponse>(`/scans/${scanId}/thread`);
+  return data;
+};
+
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
 export interface AttachmentSummary {

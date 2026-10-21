@@ -24,7 +24,9 @@ from app.models.indicator import Indicator
 from app.models.scan import Scan, ScanStatus, Verdict
 from app.models.user import User
 from app.schemas.scan import ScanListResponse, ScanOut, ScanTriggerResponse
+from app.services.finding_service import load_findings
 from app.services.scan_service import ScanService
+from app.services.thread_service import load_thread
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
@@ -278,6 +280,75 @@ async def get_scan(
         email_number=email_numbers(db, scan.user_id).get(scan.email_id),
         email_subject=scan.email.subject if scan.email else None,
     )
+
+
+@router.get("/{scan_id}/findings")
+async def get_scan_findings(
+    scan_id: int,
+    category: str = Query(None, max_length=32),
+    min_severity: float = Query(0.0, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Evidence-backed extended-analyzer findings for one scan.
+
+    The legacy verdict breakdown remains authoritative for the original
+    AI/URL/attachment/header scores.  These findings are additive and
+    include conversation, identity, kit and active-content analyzers.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    rows = load_findings(
+        db,
+        scan.id,
+        category=category,
+        min_severity=min_severity,
+    )
+    conversation = None
+    if scan.verdict and scan.verdict.breakdown:
+        conversation = scan.verdict.breakdown.get("conversation")
+    return {
+        "scan_id": scan.id,
+        "count": len(rows),
+        "findings": [row.to_dict() for row in rows],
+        "conversation": conversation,
+    }
+
+
+@router.get("/{scan_id}/thread")
+async def get_scan_thread(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Read the RFC thread around this scan's email (owner-scoped)."""
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    email = scan.email
+    if email is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+    identity, messages = load_thread(db, email)
+    findings = load_findings(db, scan.id, category="thread")
+    return {
+        "scan_id": scan.id,
+        "thread_key": identity.thread_key,
+        "normalized_subject": identity.normalized_subject,
+        "count": len(messages),
+        "messages": [
+            {
+                "email_id": item.id,
+                "message_id": item.message_id,
+                "sender": item.sender,
+                "subject": item.subject,
+                "date": item.date,
+                "in_reply_to": item.in_reply_to,
+                "has_attachments": bool(item.has_attachments),
+                "is_current": item.id == email.id,
+            }
+            for item in messages
+        ],
+        "findings": [row.to_dict() for row in findings],
+    }
 
 
 # ── AI Threat Summary ──────────────────────────────────────

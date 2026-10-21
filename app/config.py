@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     SAFE_FETCH_TIMEOUT_SECONDS: float = 10.0
     SAFE_FETCH_MAX_REDIRECTS: int = 5
 
+    # ── Conversation-aware BEC (Phase 1) ─────────────────
+    # Shadow mode: findings are persisted and shown, but the legacy final
+    # score/classification contract is not changed until a later promotion.
+    THREAD_ANALYSIS_ENABLED: bool = True
+
     # Set to True once app/integrations/virustotal.py is wired up.
     # When False, attachment analysis runs static-only (no VT hash lookups).
     ENABLE_VT_HASH_LOOKUP: bool = False
