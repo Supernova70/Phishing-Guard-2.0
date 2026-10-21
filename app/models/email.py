@@ -3,7 +3,16 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import (
+    String,
+    Text,
+    Boolean,
+    Integer,
+    ForeignKey,
+    DateTime,
+    JSON,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -28,6 +37,21 @@ class Email(Base):
     subject: Mapped[str] = mapped_column(String(1024), index=True)
     date: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     to_address: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+
+    # ── RFC 5322 conversation identity (Phase 1) ─────────
+    # Derived from Message-ID / In-Reply-To / References.  The subject
+    # fallback keeps legacy mail (fetched before these columns existed)
+    # threadable without re-ingesting the mailbox.
+    thread_key: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    in_reply_to: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, index=True
+    )
+    references_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    normalized_subject: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, index=True
+    )
 
     body_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -64,6 +88,8 @@ class Email(Base):
             "message_id": self.message_id,
             "sender": self.sender,
             "subject": self.subject,
+            "thread_key": self.thread_key,
+            "normalized_subject": self.normalized_subject,
             "date": self.date,
             "to_address": self.to_address,
             "has_html": self.has_html,

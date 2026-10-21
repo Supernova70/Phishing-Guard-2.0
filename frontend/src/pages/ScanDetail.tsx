@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode, Flag, Check } from 'lucide-react';
-import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary, type AttackTechnique } from '../api/client';
+import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode, Flag, Check, MessageSquare } from 'lucide-react';
+import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, getScanFindings, getScanThread, type ThreatSummary, type AttackTechnique, type ScanFinding, type ScanThreadResponse, type ConversationMetadata } from '../api/client';
 import { getVerdictFeedback, submitVerdictFeedback, type FeedbackLabel, type VerdictFeedbackEntry } from '../api/forensics';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
@@ -576,6 +576,128 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
   );
 }
 
+// ─── Conversation / thread BEC card ──────────────────────────────────────────
+function ConversationCard({ scanId }: { scanId: number }) {
+  const [findings, setFindings] = useState<ScanFinding[]>([]);
+  const [conversation, setConversation] = useState<ConversationMetadata | null>(null);
+  const [thread, setThread] = useState<ScanThreadResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([getScanFindings(scanId), getScanThread(scanId)])
+      .then(([findingsResult, threadResult]) => {
+        if (!active) return;
+        if (findingsResult.status === 'fulfilled') {
+          const conversationFindings = findingsResult.value.findings.filter(
+            (item) => item.category === 'thread' || item.category === 'bec',
+          );
+          setFindings(conversationFindings);
+          setConversation(findingsResult.value.conversation);
+        }
+        if (threadResult.status === 'fulfilled') setThread(threadResult.value);
+        if (findingsResult.status === 'rejected' && threadResult.status === 'rejected') {
+          setError('Conversation evidence unavailable');
+        }
+      })
+      .catch(() => active && setError('Conversation evidence unavailable'));
+    return () => { active = false; };
+  }, [scanId]);
+
+  if (error) return null;
+  if (!conversation && !thread) return null;
+  if ((conversation?.prior_messages ?? 0) === 0 && findings.length === 0) return null;
+
+  const severityColor = (severity: number) =>
+    severity >= 65 ? 'var(--danger)' : severity >= 30 ? 'var(--warning)' : 'var(--primary)';
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <MessageSquare size={17} style={{ color: 'var(--primary)' }} />
+        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          Conversation Analysis
+        </p>
+        <span style={{
+          fontSize: '0.62rem',
+          fontWeight: 700,
+          color: 'var(--warning)',
+          border: '1px solid var(--warning)',
+          borderRadius: 999,
+          padding: '1px 7px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}>
+          Shadow · score unchanged
+        </span>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {conversation?.prior_messages ?? 0} earlier message{(conversation?.prior_messages ?? 0) === 1 ? '' : 's'} in thread
+        </span>
+      </div>
+
+      {conversation?.thread_key && (
+        <p className="font-mono" style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: 8, wordBreak: 'break-all' }}>
+          {conversation.thread_key}
+        </p>
+      )}
+
+      {findings.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          {findings.map((finding) => (
+            <div key={finding.id} style={{
+              background: 'var(--bg-input)',
+              borderLeft: `3px solid ${severityColor(finding.severity)}`,
+              borderRadius: '0 6px 6px 0',
+              padding: '9px 12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{finding.title}</span>
+                <span className="font-mono" style={{ fontSize: '0.62rem', color: severityColor(finding.severity), marginLeft: 'auto' }}>
+                  {finding.code} · {finding.severity.toFixed(0)}
+                </span>
+              </div>
+              {finding.evidence.slice(0, 2).map((evidence, index) => (
+                <p key={index} className="font-mono" style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 4, wordBreak: 'break-word' }}>
+                  {evidence.kind}: {evidence.value}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {findings.length === 0 && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 10 }}>
+          No conversation-specific risk signals were found in this thread.
+        </p>
+      )}
+
+      {thread && thread.messages.length > 1 && (
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+          <p style={{ fontSize: '0.66rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Thread timeline
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {thread.messages.map((message) => (
+              <div key={message.email_id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', opacity: message.is_current ? 1 : 0.72 }}>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', minWidth: 20 }}>#{message.email_id}</span>
+                <span style={{ fontSize: '0.72rem', color: message.is_current ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: message.is_current ? 700 : 400, flex: 1 }}>
+                  {message.subject}
+                </span>
+                <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {message.sender}
+                </span>
+                {message.has_attachments && <Paperclip size={11} style={{ color: 'var(--text-muted)' }} />}
+                {message.is_current && <span style={{ fontSize: '0.6rem', color: 'var(--primary)' }}>current</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Scan Detail Page ─────────────────────────────────────────────────────────
 export function ScanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -662,6 +784,9 @@ export function ScanDetail() {
           </div>
         </div>
       )}
+
+      {/* Conversation-aware BEC (shadow) */}
+      {v && <ConversationCard scanId={scan.id} />}
 
       {/* Analyst feedback (ground truth for model metrics) */}
       {v && <VerdictFeedbackCard scanId={scan.id} prediction={v.classification} />}

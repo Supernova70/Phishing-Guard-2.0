@@ -16,6 +16,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.engines.attachment_analyzer import AttachmentAnalyzer
 from app.engines.bec_analyzer import analyze_bec
 from app.engines.correlation.attribution import AttributionInputs, attribute
@@ -173,7 +174,25 @@ class ScanService:
             for ur in url_result.per_url_results:
                 self.db.add(_to_url_row(scan.id, ur))
 
-            # ── 2b. BEC categories + lookalike domains (rules) ────
+            # ── 2b. Conversation-aware BEC (shadow) ──────────────
+            # Findings are persisted and exposed separately; the legacy
+            # fusion below deliberately ignores them until promoted.
+            conversation_analysis = None
+            if get_settings().THREAD_ANALYSIS_ENABLED:
+                try:
+                    from app.services.thread_service import analyze_email_thread
+
+                    conversation_analysis = analyze_email_thread(
+                        self.db, scan, email, persist=True
+                    )
+                except Exception as exc:  # conversation must never fail a scan
+                    logger.error(
+                        "Conversation analysis failed for email %s: %s",
+                        email.id,
+                        exc,
+                    )
+
+            # ── 2c. BEC categories + lookalike domains (rules) ────
             headers_map = self._headers_for(email)
             bec_result = analyze_bec(
                 subject=email.subject or "",
@@ -446,6 +465,15 @@ class ScanService:
                         "errors": header_result.errors,
                     },
                     "attribution": attribution.to_dict(),
+                    "conversation": (
+                        conversation_analysis.shadow_metadata
+                        if conversation_analysis is not None
+                        else {
+                            "shadow": True,
+                            "status": "disabled",
+                            "finding_count": 0,
+                        }
+                    ),
                 },
             )
             self.db.add(verdict)
