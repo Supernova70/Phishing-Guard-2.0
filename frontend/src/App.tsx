@@ -16,6 +16,7 @@ import { CampaignsPage } from './pages/CampaignsPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { LoginPage } from './pages/LoginPage';
 import { UsersPage } from './pages/UsersPage';
+import { CompliancePage } from './pages/CompliancePage';
 import { SystemHealthProvider } from './hooks/useSystemHealth';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RequirePermission } from './auth/RequirePermission';
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="alerts" element={<AlertsPage />} />
               <Route path="url-analysis" element={<UrlAnalysis />} />
               <Route path="attachments" element={<AttachmentsPage />} />
+              <Route path="compliance" element={<CompliancePage />} />
               <Route path="system-health" element={
                 <RequirePermission permission="system.health"><HealthPage /></RequirePermission>
               } />
