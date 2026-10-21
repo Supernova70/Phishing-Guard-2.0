@@ -19,6 +19,7 @@ from app.api.jobs import router as jobs_router
 from app.api.artifacts import router as artifacts_router
 from app.api.kit import router as kit_router
 from app.api.hunts import router as hunts_router
+from app.api.incidents import router as incidents_router
 
 api_router = APIRouter()
 
@@ -39,3 +40,4 @@ api_router.include_router(jobs_router)
 api_router.include_router(artifacts_router)
 api_router.include_router(kit_router)
 api_router.include_router(hunts_router)
+api_router.include_router(incidents_router)

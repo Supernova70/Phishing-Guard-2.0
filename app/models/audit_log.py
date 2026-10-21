@@ -25,6 +25,12 @@ AUDIT_ACTIONS = (
     "retention_purge",
     "evidence_append",
     "evidence_rechain",
+    "incident_create",
+    "incident_action_request",
+    "incident_action_approve",
+    "incident_action_reject",
+    "incident_action_execute",
+    "incident_close",
 )
 
 

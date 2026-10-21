@@ -24,6 +24,7 @@ PERMISSIONS: dict[str, str] = {
     "system.settings": "View and edit Settings (thresholds, API keys)",
     "system.health": "View API Health dashboard + component detail",
     "users.manage": "Manage user accounts and grant permissions",
+    "incidents.respond": "Approve, reject, execute, and close incident response actions",
 }
 
 ROLE_DEFAULTS: dict[str, set[str]] = {
