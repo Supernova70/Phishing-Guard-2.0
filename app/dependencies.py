@@ -79,3 +79,14 @@ def get_artifact_store():
         settings.artifact_dir,
         max_bytes=settings.ARTIFACT_MAX_BYTES,
     )
+
+
+def get_safe_fetcher():
+    """Bounded fetcher for explicit, user-initiated URL inspection."""
+    from app.security.safe_fetch import SafeFetcher
+
+    return SafeFetcher(
+        timeout_seconds=settings.SAFE_FETCH_TIMEOUT_SECONDS,
+        max_bytes=settings.SAFE_FETCH_MAX_BYTES,
+        max_redirects=settings.SAFE_FETCH_MAX_REDIRECTS,
+    )
