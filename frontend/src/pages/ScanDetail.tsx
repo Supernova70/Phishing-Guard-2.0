@@ -1,16 +1,153 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode } from 'lucide-react';
+import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode, Flag, Check } from 'lucide-react';
 import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary, type AttackTechnique } from '../api/client';
+import { getVerdictFeedback, submitVerdictFeedback, type FeedbackLabel, type VerdictFeedbackEntry } from '../api/forensics';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { ScoreGauge } from '../components/ui/ScoreGauge';
 import { JsonViewer } from '../components/ui/JsonViewer';
 import { HeaderForensics } from '../components/forensics/HeaderForensics';
 import { formatDistanceToNow, format } from 'date-fns';
-import type { Scan, EmailDetail, ScanBreakdown } from '../types';
+import type { Scan, EmailDetail, ScanBreakdown, Classification } from '../types';
 import { getVtUrlLink, getVtFileLink } from '../utils/virustotal';
+
+// ─── Verdict Feedback ────────────────────────────────────────────────────────
+const FEEDBACK_OPTIONS: Array<{ label: FeedbackLabel; title: string; color: string }> = [
+  { label: 'phishing', title: 'Phishing', color: 'var(--danger)' },
+  { label: 'legitimate', title: 'Legitimate', color: 'var(--safe)' },
+  { label: 'unsure', title: 'Not sure', color: 'var(--text-muted)' },
+];
+
+function VerdictFeedbackCard({ scanId, prediction }: { scanId: number; prediction: Classification }) {
+  const [existing, setExisting] = useState<VerdictFeedbackEntry | null>(null);
+  const [selected, setSelected] = useState<FeedbackLabel | null>(null);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getVerdictFeedback(scanId)
+      .then((fb) => {
+        if (!active) return;
+        setExisting(fb);
+        setSelected(fb?.label ?? null);
+        setComment(fb?.comment ?? '');
+      })
+      .catch(() => { /* feedback is optional — never block the page */ })
+      .finally(() => active && setLoaded(true));
+    return () => { active = false; };
+  }, [scanId]);
+
+  const save = async (label: FeedbackLabel) => {
+    setSelected(label);
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const row = await submitVerdictFeedback(scanId, label, comment);
+      setExisting(row);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save feedback');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Flag size={16} style={{ color: 'var(--primary)' }} />
+        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          Was this verdict right?
+        </p>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          Your label is the ground truth used to measure the model.
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        {FEEDBACK_OPTIONS.map((option) => {
+          const active = selected === option.label;
+          return (
+            <button
+              key={option.label}
+              onClick={() => void save(option.label)}
+              disabled={saving || !loaded}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: saving ? 'wait' : 'pointer',
+                background: active ? 'var(--bg-input)' : 'transparent',
+                border: `1px solid ${active ? option.color : 'var(--border-default)'}`,
+                color: active ? option.color : 'var(--text-secondary)',
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {active && <Check size={12} />}
+              {option.title}
+            </button>
+          );
+        })}
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+          Model said <strong style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{prediction}</strong>
+        </span>
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={(e) => { setComment(e.target.value); setSaved(false); }}
+        placeholder="Optional note — why is this verdict wrong or right?"
+        maxLength={1000}
+        rows={2}
+        style={{
+          width: '100%',
+          marginTop: 12,
+          padding: '8px 10px',
+          borderRadius: 6,
+          border: '1px solid var(--border-default)',
+          background: 'var(--bg-input)',
+          color: 'var(--text-primary)',
+          fontSize: '0.78rem',
+          resize: 'vertical',
+          fontFamily: 'inherit',
+        }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          onClick={() => selected && void save(selected)}
+          disabled={!selected || saving}
+          style={{ fontSize: '0.72rem', padding: '4px 12px', opacity: !selected || saving ? 0.55 : 1 }}
+        >
+          {saving ? 'Saving…' : 'Save note'}
+        </button>
+        {saved && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--safe)' }}>
+            Feedback saved — dashboard metrics updated.
+          </span>
+        )}
+        {existing && !saved && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            Current label: <strong style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{existing.label}</strong>
+          </span>
+        )}
+        {error && <span style={{ fontSize: '0.72rem', color: 'var(--text-danger)' }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
 
 // ─── Verdict Hero ─────────────────────────────────────────────────────────────
 function VerdictHero({ scan }: { scan: Scan }) {
@@ -525,6 +662,9 @@ export function ScanDetail() {
           </div>
         </div>
       )}
+
+      {/* Analyst feedback (ground truth for model metrics) */}
+      {v && <VerdictFeedbackCard scanId={scan.id} prediction={v.classification} />}
 
       {/* Header forensics */}
       <HeaderForensics emailId={scan.email_id} flags={bd?.header?.flags ?? []} rules={bd?.header?.rules ?? []} />

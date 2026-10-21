@@ -15,7 +15,7 @@ import {
   Download,
 } from 'lucide-react';
 import { getEmails, getScans, exportScansCsv } from '../api/client';
-import { getAlerts, getCampaigns, getIpStats, getAttributionStats, type AttributionStats } from '../api/forensics';
+import { getAlerts, getCampaigns, getIpStats, getAttributionStats, getModelPerformance, type AttributionStats, type ModelPerformance } from '../api/forensics';
 import { AttributionDonut } from '../components/charts/AttributionDonut';
 import { useCountUp } from '../hooks/useCountUp';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
@@ -280,6 +280,118 @@ function RecentActivity({ scans, emails, onViewScan }: { scans: Scan[]; emails: 
 // One silent retry: these four panels are loaded with Promise.allSettled, so a
 // single transient 502 would otherwise leave them empty with no UI error and
 // no way to recover without a full page reload.
+// ─── Model Feedback Loop ─────────────────────────────────────────────────────
+function pct(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function ModelHealthCard() {
+  const navigate = useNavigate();
+  const [perf, setPerf] = useState<ModelPerformance | null>(null);
+
+  useEffect(() => {
+    getModelPerformance().then(setPerf).catch(() => { /* optional widget */ });
+  }, []);
+
+  if (!perf) return null;
+
+  const metric = (label: string, value: number, color: string) => (
+    <div style={{ textAlign: 'center', minWidth: 74 }}>
+      <p className="font-mono" style={{ fontSize: '1.15rem', fontWeight: 900, color }}>{pct(value)}</p>
+      <p style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</p>
+    </div>
+  );
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Brain size={17} style={{ color: 'var(--primary)' }} />
+          <div>
+            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Model Feedback Loop</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Analyst labels vs model verdicts — suspicious and dangerous count as threats
+            </p>
+          </div>
+        </div>
+        <button className="btn-ghost" onClick={() => navigate('/scans')} style={{ fontSize: '0.72rem', padding: '4px 12px' }}>
+          Review scans →
+        </button>
+      </div>
+
+      {perf.total === 0 ? (
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 14 }}>
+          No analyst feedback yet. Open a completed scan and label its verdict to start measuring
+          precision and recall on your own mailbox.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 18 }}>
+            {metric('Accuracy', perf.accuracy, 'var(--primary)')}
+            {metric('Precision', perf.precision, 'var(--safe)')}
+            {metric('Recall', perf.recall, 'var(--warning)')}
+            {metric('F1', perf.f1, 'var(--text-primary)')}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              {[
+                { key: 'tp', label: 'TP', value: perf.confusion.tp, color: 'var(--safe)' },
+                { key: 'fp', label: 'FP', value: perf.confusion.fp, color: 'var(--danger)' },
+                { key: 'fn', label: 'FN', value: perf.confusion.fn, color: 'var(--warning)' },
+                { key: 'tn', label: 'TN', value: perf.confusion.tn, color: 'var(--text-muted)' },
+              ].map((c) => (
+                <span
+                  key={c.key}
+                  className="font-mono"
+                  style={{
+                    fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                    background: 'var(--bg-input)', color: c.color,
+                  }}
+                >
+                  {c.label} {c.value}
+                </span>
+              ))}
+              {perf.unsure > 0 && (
+                <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', padding: '2px 4px' }}>
+                  {perf.unsure} unsure (excluded)
+                </span>
+              )}
+            </div>
+
+            {perf.recent.slice(0, 3).map((row) => (
+              <button
+                key={row.id}
+                onClick={() => navigate(`/scans/${row.scan_id}`)}
+                style={{
+                  display: 'flex', width: '100%', alignItems: 'center', gap: 8,
+                  padding: '4px 0', background: 'transparent', border: 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                  background: row.label === 'phishing' ? 'var(--danger)'
+                    : row.label === 'legitimate' ? 'var(--safe)' : 'var(--text-muted)',
+                }} />
+                <span style={{
+                  fontSize: '0.72rem', color: 'var(--text-secondary)', flex: 1,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {row.email_subject ?? `Scan #${row.scan_id}`}
+                </span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                  {row.predicted_classification} → {row.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const retryOnce = async <T,>(fn: () => Promise<T>): Promise<T> => {
   try {
     return await fn();
@@ -366,6 +478,9 @@ export function Dashboard() {
 
       {/* Forensics intel strip */}
       <IntelStrip spoofCount={spoofCount} openCampaigns={openCampaigns} topCountries={topCountries} attribution={attribution} />
+
+      {/* Human-in-the-loop model metrics */}
+      <ModelHealthCard />
 
       {/* Timeline + Donut */}
       <div style={{ display: 'flex', gap: 16, height: 280 }}>

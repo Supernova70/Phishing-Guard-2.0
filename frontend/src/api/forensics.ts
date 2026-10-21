@@ -476,3 +476,63 @@ export const scanQrUpload = async (file: File): Promise<QrScanResult> => {
   });
   return data;
 };
+
+// ─── Analyst feedback / model performance ───────────────────────────────────
+
+export type FeedbackLabel = 'phishing' | 'legitimate' | 'unsure';
+
+export interface VerdictFeedbackEntry {
+  id: number;
+  scan_id: number;
+  label: FeedbackLabel;
+  predicted_classification: Classification;
+  comment: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  email_subject?: string | null;
+}
+
+export interface ModelPerformance {
+  total: number;
+  labelled: number;
+  unsure: number;
+  confusion: { tp: number; fp: number; fn: number; tn: number };
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  by_prediction: Array<{
+    classification: Classification;
+    confirmed: number;
+    disputed: number;
+    total: number;
+  }>;
+  recent: VerdictFeedbackEntry[];
+  labels: FeedbackLabel[];
+}
+
+export const submitVerdictFeedback = async (
+  scanId: number,
+  label: FeedbackLabel,
+  comment?: string,
+): Promise<VerdictFeedbackEntry> => {
+  const { data } = await apiClient.post<{ feedback: VerdictFeedbackEntry }>(
+    `/scans/${scanId}/feedback`,
+    { label, comment: comment?.trim() || null },
+  );
+  return data.feedback;
+};
+
+export const getVerdictFeedback = async (
+  scanId: number,
+): Promise<VerdictFeedbackEntry | null> => {
+  const { data } = await apiClient.get<{ feedback: VerdictFeedbackEntry | null }>(
+    `/scans/${scanId}/feedback`,
+  );
+  return data.feedback;
+};
+
+export const getModelPerformance = async (): Promise<ModelPerformance> => {
+  const { data } = await apiClient.get<ModelPerformance>('/intel/model-performance');
+  return data;
+};
