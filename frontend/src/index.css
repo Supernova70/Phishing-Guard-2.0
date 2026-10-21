@@ -144,6 +144,19 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Global search in the header — hidden when the top bar gets tight. */
+.global-search {
+  width: 320px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1180px) {
+  .global-search {
+    display: none;
+  }
+}
+
+
 /* ─── Glow Shadows ──────────────────────────────────────────────────────────── */
 .glow-danger  { box-shadow: 0 0 16px var(--danger-glow), 0 0 4px rgba(239,68,68,0.3); }
 .glow-warning { box-shadow: 0 0 16px var(--warning-glow), 0 0 4px rgba(245,158,11,0.3); }
