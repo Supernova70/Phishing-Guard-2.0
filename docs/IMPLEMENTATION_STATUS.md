@@ -1,10 +1,28 @@
 # Phishing Guard V2 — Implementation Status & Roadmap
 
 > **Purpose**: Single source of truth for *what is done*, *what is left*, and *exactly how we will build the rest*. This is a college major project, so the design prioritises **robustness** (isolation, timeouts, idempotency, auditability) over fancy features.
-> **Last updated**: 2026-07-10
+> **Last updated**: 2026-10-21
 > **Owner**: Project team
 
 ---
+
+## 0. October 2026 — Judges' Review Additions
+
+These capabilities were added on top of the original roadmap and are live in
+production (`https://phishing-guard.duckdns.org`). All are covered by the
+offline test suite (622 tests at the time of writing).
+
+| Capability | What it does | Where |
+|---|---|---|
+| **MITRE ATT&CK mapping** | Derives techniques/tactics from the stored verdict `breakdown` (retroactive, no re-scan): credential-harvest BEC, spoofed identity, lookalike domains, high-risk URLs, malicious attachments. Campaign-level technique aggregation. | `app/engines/mitre.py`, `GET /scans/{id}/mitre`, `GET /scans/{id}/summary`, UI panel on Scan Detail + campaign chips |
+| **STIX 2.1 / CSV IoC export** | Exports observables from **confirmed dangerous** scans only: sender/reply-to/URL domains, origin IPs, attachment hashes. Shared infrastructure (Google, GitHub, CDNs, click-trackers) and brand-owned domains are skip-listed; URL domains require the engine's ≥60 high-risk line. | `app/engines/ioc_export.py`, `GET /export/stix`, `GET /export/csv`, Graph + Campaign export buttons |
+| **Evidence & Audit** | Custody table with per-row hash verification, whole-chain integrity, retained-raw download (audited), filterable access log. Appends are serialised with a Postgres advisory transaction lock; `scripts/repair_evidence_chain.py` re-anchors historical forks after verifying content hashes and aborts on tampering. | `frontend/src/pages/CompliancePage.tsx` (`/compliance`), `app/services/evidence_service.py`, audit actions `raw_view` / `evidence_verify` / `report_export` / `evidence_rechain` |
+| **Quishing (QR) detection** | Decodes QR/barcodes from images (PNG/JPEG/GIF/BMP/TIFF/WebP) and rasterised PDF pages (≤5 pages, ≤25 symbols, 40 MP guard). Decoded URLs are deduplicated against body links and scored by the URL engine (heuristics, VT, lookalike); symbols are preserved for forensics. QR presence alone adds no attachment score. | `app/engines/analyzers/qr_analyzer.py`, `app/services/scan_service.py` (`breakdown.qr`), `POST /attachments/qr-scan`, Attachments inspector + Scan Detail panel |
+| **Analyst feedback loop** | One ground-truth label per scan/user (`phishing` / `legitimate` / `unsure`) with the model prediction snapshotted. Metrics at the threat boundary (suspicious+dangerous): confusion matrix, accuracy, precision, recall, F1, per-class confirmed/disputed counts. | `app/models/feedback.py`, migration `0013_verdict_feedback.py`, `POST/GET /scans/{id}/feedback`, `GET /intel/model-performance`, feedback card on Scan Detail + dashboard model-health card |
+
+**Still backlog (P2):** server-sent-event alert push and cross-entity global
+search. Neither blocks the judges' demo.
+
 
 ## Table of Contents
 
