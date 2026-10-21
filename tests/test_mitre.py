@@ -171,7 +171,8 @@ def test_lookalike_domain_maps_impersonation_and_infrastructure():
         "ai": {
             "lookalike": {
                 "matches": [
-                    {"domain": "paypa1.com", "brand": "paypal", "reason": "typosquat"}
+                    {"domain": "paypa1.com", "brand": "paypal", "reason": "typosquat"},
+                    {"domain": "paypa1.com", "brand": "paypal", "reason": "typosquat"},
                 ]
             }
         }
@@ -180,6 +181,11 @@ def test_lookalike_domain_maps_impersonation_and_infrastructure():
     by_id = {t["id"]: t for t in techs}
     assert by_id["T1656"]["tactic"] == "Defense Evasion"
     assert "T1583.001" in by_id
+    # Duplicate matches (sender + URLs) are counted once.
+    assert by_id["T1656"]["weight"] == pytest.approx(5.0)
+    assert by_id["T1656"]["evidence"] == [
+        "Lookalike domain paypa1.com imitates paypal (typosquat)"
+    ]
     # No delivery channel surfaced → generic phishing parent.
     assert "T1566" in by_id
     assert any("paypa1.com" in e for e in by_id["T1656"]["evidence"])
