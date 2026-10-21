@@ -1,17 +1,23 @@
 import type { AuthUser } from '../api/auth';
 
-export type Permission = 'system.settings' | 'system.health' | 'users.manage';
+export type Permission =
+  | 'system.settings'
+  | 'system.health'
+  | 'users.manage'
+  | 'incidents.respond';
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   'system.settings': 'System Settings',
   'system.health': 'API Health',
   'users.manage': 'User Management',
+  'incidents.respond': 'Incident Response',
 };
 
 export const ALL_PERMISSIONS: Permission[] = [
   'system.settings',
   'system.health',
   'users.manage',
+  'incidents.respond',
 ];
 
 /**

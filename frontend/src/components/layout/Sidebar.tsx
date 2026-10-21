@@ -16,6 +16,7 @@ import {
   Users,
   FileCheck2,
   Crosshair,
+  ShieldAlert,
 } from 'lucide-react';
 import { StatusDot } from '../ui/Badge';
 import type { HealthResponse } from '../../hooks/useSystemHealth';
@@ -134,6 +135,7 @@ export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online
     { to: '/emails', icon: <Inbox size={16} />, label: 'Email Inbox', badge: unreadCount || null, badgeType: 'count' },
     { to: '/active-scans', icon: <ScanLine size={16} />, label: 'Active Scans', badge: runningScans || null, badgeType: 'count' },
     { to: '/alerts', icon: <Bell size={16} />, label: 'Alerts' },
+    { to: '/incidents', icon: <ShieldAlert size={16} />, label: 'Incident Response' },
   ];
 
   const analyzeItems: NavItem[] = [

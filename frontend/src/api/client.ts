@@ -325,6 +325,160 @@ export const runHunt = async (huntId: number): Promise<{ hunt_id: number; schedu
   return data;
 };
 
+// ─── Incidents / approval-gated response (Phase 6) ───────────────────────────
+
+export type IncidentStatus =
+  | 'open'
+  | 'pending_approval'
+  | 'dry_run'
+  | 'contained'
+  | 'closed';
+
+export type ResponseActionType =
+  | 'quarantine_email'
+  | 'block_sender'
+  | 'disable_account'
+  | 'notify_user';
+
+export type ResponseActionStatus =
+  | 'pending_approval'
+  | 'approved'
+  | 'rejected'
+  | 'executing'
+  | 'dry_run'
+  | 'executed'
+  | 'failed'
+  | 'cancelled';
+
+export interface ResponseAction {
+  id: number;
+  incident_id: number;
+  user_id: number;
+  action_type: ResponseActionType;
+  target: string;
+  reason: string | null;
+  status: ResponseActionStatus;
+  requested_by: number | null;
+  approved_by: number | null;
+  rejected_by: number | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  executed_at: string | null;
+  execution_mode: string | null;
+  result: Record<string, unknown> | null;
+  dedupe_key: string | null;
+  created_at: string | null;
+  request_audit_id: number | null;
+  approval_audit_id: number | null;
+  rejection_audit_id: number | null;
+  execution_audit_id: number | null;
+  evidence_id: number | null;
+}
+
+export interface Incident {
+  id: number;
+  user_id: number;
+  scan_id: number | null;
+  email_id: number | null;
+  title: string;
+  description: string | null;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: IncidentStatus;
+  created_by: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  closed_at: string | null;
+  closed_by: number | null;
+  created_audit_id: number | null;
+  closed_audit_id: number | null;
+  url: string;
+  actions?: ResponseAction[];
+}
+
+export interface IncidentListResponse {
+  count: number;
+  total: number;
+  incidents: Incident[];
+}
+
+export const createIncident = async (input: {
+  title: string;
+  description?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  scan_id?: number;
+  email_id?: number;
+}): Promise<Incident> => {
+  const { data } = await apiClient.post<Incident>('/incidents', input);
+  return data;
+};
+
+export const listIncidents = async (status?: string): Promise<IncidentListResponse> => {
+  const { data } = await apiClient.get<IncidentListResponse>('/incidents', {
+    params: status ? { status } : {},
+  });
+  return data;
+};
+
+export const getIncident = async (incidentId: number): Promise<Incident> => {
+  const { data } = await apiClient.get<Incident>(`/incidents/${incidentId}`);
+  return data;
+};
+
+export const requestIncidentAction = async (
+  incidentId: number,
+  input: { action_type: ResponseActionType; target: string; reason?: string },
+  idempotencyKey?: string,
+): Promise<ResponseAction> => {
+  const { data } = await apiClient.post<ResponseAction>(
+    `/incidents/${incidentId}/actions`,
+    input,
+    { headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {} },
+  );
+  return data;
+};
+
+export const approveIncidentAction = async (
+  incidentId: number,
+  actionId: number,
+): Promise<ResponseAction> => {
+  const { data } = await apiClient.post<ResponseAction>(
+    `/incidents/${incidentId}/actions/${actionId}/approve`,
+  );
+  return data;
+};
+
+export const rejectIncidentAction = async (
+  incidentId: number,
+  actionId: number,
+  reason?: string,
+): Promise<ResponseAction> => {
+  const { data } = await apiClient.post<ResponseAction>(
+    `/incidents/${incidentId}/actions/${actionId}/reject`,
+    { reason },
+  );
+  return data;
+};
+
+export const executeIncidentAction = async (
+  incidentId: number,
+  actionId: number,
+): Promise<ResponseAction> => {
+  const { data } = await apiClient.post<ResponseAction>(
+    `/incidents/${incidentId}/actions/${actionId}/execute`,
+  );
+  return data;
+};
+
+export const closeIncident = async (
+  incidentId: number,
+  reason?: string,
+): Promise<Incident> => {
+  const { data } = await apiClient.post<Incident>(`/incidents/${incidentId}/close`, {
+    reason,
+  });
+  return data;
+};
+
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
 export interface AttachmentSummary {
