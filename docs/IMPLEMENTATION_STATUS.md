@@ -19,9 +19,9 @@ offline test suite (622 tests at the time of writing).
 | **Evidence & Audit** | Custody table with per-row hash verification, whole-chain integrity, retained-raw download (audited), filterable access log. Appends are serialised with a Postgres advisory transaction lock; `scripts/repair_evidence_chain.py` re-anchors historical forks after verifying content hashes and aborts on tampering. | `frontend/src/pages/CompliancePage.tsx` (`/compliance`), `app/services/evidence_service.py`, audit actions `raw_view` / `evidence_verify` / `report_export` / `evidence_rechain` |
 | **Quishing (QR) detection** | Decodes QR/barcodes from images (PNG/JPEG/GIF/BMP/TIFF/WebP) and rasterised PDF pages (≤5 pages, ≤25 symbols, 40 MP guard). Decoded URLs are deduplicated against body links and scored by the URL engine (heuristics, VT, lookalike); symbols are preserved for forensics. QR presence alone adds no attachment score. | `app/engines/analyzers/qr_analyzer.py`, `app/services/scan_service.py` (`breakdown.qr`), `POST /attachments/qr-scan`, Attachments inspector + Scan Detail panel |
 | **Analyst feedback loop** | One ground-truth label per scan/user (`phishing` / `legitimate` / `unsure`) with the model prediction snapshotted. Metrics at the threat boundary (suspicious+dangerous): confusion matrix, accuracy, precision, recall, F1, per-class confirmed/disputed counts. | `app/models/feedback.py`, migration `0013_verdict_feedback.py`, `POST/GET /scans/{id}/feedback`, `GET /intel/model-performance`, feedback card on Scan Detail + dashboard model-health card |
+| **Global search** | Header palette (Cmd/Ctrl+K) searches email subject/sender, completed scans (newest scan per email, exact id lookup when numeric) and IOC values. Results are grouped, owner-scoped and navigate directly to the matching scan or inbox. | `app/api/search.py`, `GET /search`, `frontend/src/components/layout/Header.tsx` |
 
-**Still backlog (P2):** server-sent-event alert push and cross-entity global
-search. Neither blocks the judges' demo.
+**Still backlog (P2):** server-sent-event alert push. It does not block the judges' demo.
 
 
 ## Table of Contents
