@@ -225,6 +225,106 @@ export const getScanThread = async (scanId: number): Promise<ScanThreadResponse>
   return data;
 };
 
+// ─── Retroactive hunts (Phase 5) ─────────────────────────────────────────────
+
+export interface HuntCreateInput {
+  since?: string;
+  until?: string;
+  classification?: 'safe' | 'suspicious' | 'dangerous';
+  sender_domain?: string;
+  subject_contains?: string;
+  analyzers: string[];
+  max_scans: number;
+  run_now: boolean;
+}
+
+export interface HuntJob {
+  id: number;
+  kind: string;
+  status: string;
+  progress: number;
+  total: number;
+  message: string | null;
+  attempts: number;
+  max_attempts: number;
+  cancel_requested: boolean;
+  error: string | null;
+  result: HuntResult | null;
+  created_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface HuntResultFinding {
+  id: number;
+  scan_id: number;
+  analyzer: string;
+  category: string;
+  code: string;
+  title: string;
+  severity: number;
+  confidence: number;
+  evidence: FindingEvidence[];
+}
+
+export interface HuntResult {
+  hunt: Record<string, unknown>;
+  analyzers: string[];
+  scans_matched: number;
+  scans_scanned: number;
+  scans_with_findings: number;
+  new_finding_count: number;
+  new_by_analyzer: Record<string, number>;
+  new_by_code: Record<string, number>;
+  scan_ids_with_findings: number[];
+  top_findings: HuntResultFinding[];
+  top_findings_truncated: boolean;
+  completed_at: string;
+}
+
+export interface HuntListResponse {
+  count: number;
+  total: number;
+  hunts: HuntJob[];
+}
+
+export const createHunt = async (
+  input: HuntCreateInput,
+  idempotencyKey?: string,
+): Promise<{ hunt_id: number; status: string; progress: number; total: number }> => {
+  const { data } = await apiClient.post('/hunts', input, {
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+  });
+  return data;
+};
+
+export const listHunts = async (): Promise<HuntListResponse> => {
+  const { data } = await apiClient.get<HuntListResponse>('/hunts');
+  return data;
+};
+
+export const getHunt = async (huntId: number): Promise<HuntJob> => {
+  const { data } = await apiClient.get<HuntJob>(`/hunts/${huntId}`);
+  return data;
+};
+
+export const getHuntResults = async (
+  huntId: number,
+): Promise<{ hunt_id: number; status: string; result: HuntResult | null; error: string | null }> => {
+  const { data } = await apiClient.get(`/hunts/${huntId}/results`);
+  return data;
+};
+
+export const cancelHunt = async (huntId: number): Promise<HuntJob> => {
+  const { data } = await apiClient.post<HuntJob>(`/hunts/${huntId}/cancel`);
+  return data;
+};
+
+export const runHunt = async (huntId: number): Promise<{ hunt_id: number; scheduled: boolean }> => {
+  const { data } = await apiClient.post(`/hunts/${huntId}/run`);
+  return data;
+};
+
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
 export interface AttachmentSummary {

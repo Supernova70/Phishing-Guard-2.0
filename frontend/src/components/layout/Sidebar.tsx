@@ -15,6 +15,7 @@ import {
   Bell,
   Users,
   FileCheck2,
+  Crosshair,
 } from 'lucide-react';
 import { StatusDot } from '../ui/Badge';
 import type { HealthResponse } from '../../hooks/useSystemHealth';
@@ -139,6 +140,7 @@ export function Sidebar({ unreadCount = 0, runningScans = 0, apiStatus = 'online
     { to: '/scans', icon: <ShieldCheck size={16} />, label: 'Scan Results' },
     { to: '/graph', icon: <Share2 size={16} />, label: 'Attribution Graph' },
     { to: '/campaigns', icon: <Megaphone size={16} />, label: 'Campaigns' },
+    { to: '/hunts', icon: <Crosshair size={16} />, label: 'Retroactive Hunts' },
     { to: '/url-analysis', icon: <Link2 size={16} />, label: 'URL Analysis' },
     { to: '/attachments', icon: <Paperclip size={16} />, label: 'Attachments' },
     { to: '/compliance', icon: <FileCheck2 size={16} />, label: 'Evidence & Audit' },

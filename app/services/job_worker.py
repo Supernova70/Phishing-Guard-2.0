@@ -43,6 +43,39 @@ class JobWorker:
         self.worker_id = worker_id or default_worker_id()
         self.lease_seconds = lease_seconds
 
+    def _execute(self, db: Session, job: JobRun) -> bool:
+        if job_service.is_cancel_requested(db, job.id):
+            job_service.cancel(db, job_id=job.id, worker_id=self.worker_id)
+            return True
+
+        handler = self.handlers.get(job.kind)
+        if handler is None:
+            job_service.fail(
+                db,
+                job_id=job.id,
+                worker_id=self.worker_id,
+                error=f"no handler registered for job kind '{job.kind}'",
+            )
+            return True
+
+        try:
+            result = handler(db, job)
+            job_service.complete(
+                db,
+                job_id=job.id,
+                worker_id=self.worker_id,
+                result=result,
+            )
+        except Exception as exc:  # noqa: BLE001 - job failure is contained
+            logger.exception("job %s (%s) failed", job.id, job.kind)
+            job_service.fail(
+                db,
+                job_id=job.id,
+                worker_id=self.worker_id,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        return True
+
     def run_once(self) -> bool:
         """Claim and execute at most one job.  Returns True if one was handled."""
         db = self.session_factory()
@@ -54,37 +87,23 @@ class JobWorker:
             )
             if job is None:
                 return False
-            if job_service.is_cancel_requested(db, job.id):
-                job_service.cancel(db, job_id=job.id, worker_id=self.worker_id)
-                return True
+            return self._execute(db, job)
+        finally:
+            db.close()
 
-            handler = self.handlers.get(job.kind)
-            if handler is None:
-                job_service.fail(
-                    db,
-                    job_id=job.id,
-                    worker_id=self.worker_id,
-                    error=f"no handler registered for job kind '{job.kind}'",
-                )
-                return True
-
-            try:
-                result = handler(db, job)
-                job_service.complete(
-                    db,
-                    job_id=job.id,
-                    worker_id=self.worker_id,
-                    result=result,
-                )
-            except Exception as exc:  # noqa: BLE001 - job failure is contained
-                logger.exception("job %s (%s) failed", job.id, job.kind)
-                job_service.fail(
-                    db,
-                    job_id=job.id,
-                    worker_id=self.worker_id,
-                    error=f"{type(exc).__name__}: {exc}",
-                )
-            return True
+    def run_job(self, job_id: int) -> bool:
+        """Claim and execute one specific job (owner-triggered/manual path)."""
+        db = self.session_factory()
+        try:
+            job = job_service.claim_job(
+                db,
+                job_id=job_id,
+                worker_id=self.worker_id,
+                lease_seconds=self.lease_seconds,
+            )
+            if job is None:
+                return False
+            return self._execute(db, job)
         finally:
             db.close()
 
