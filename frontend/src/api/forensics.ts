@@ -354,8 +354,15 @@ export const getReport = async (scanId: number, exportEvidence = false): Promise
 
 export interface AlertItem {
   id: number;
-  scan_id: number;
+  scan_id: number | null;
   email_id: number | null;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: number | null;
+  severity: string;
+  dedupe_key: string | null;
+  payload: Record<string, unknown>;
+  url: string | null;
   score: number;
   classification: Classification;
   reasons: string[];

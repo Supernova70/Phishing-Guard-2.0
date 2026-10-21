@@ -77,7 +77,7 @@ function AlertCard({ alert, onRead, onOpen }: { alert: AlertItem; onRead: () => 
           onClick={onOpen}
           style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--primary-glow)', border: '1px solid var(--primary)', borderRadius: 4, color: 'var(--primary)', padding: '4px 10px', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
         >
-          Open Scan <ExternalLink size={11} />
+          {alert.scan_id != null ? 'Open Scan' : 'Open Alert'} <ExternalLink size={11} />
         </button>
         {!alert.read && (
           <button
@@ -191,7 +191,7 @@ export function AlertsPage() {
               onRead={() => handleRead(a.id)}
               onOpen={() => {
                 if (!a.read) void handleRead(a.id);
-                navigate(`/scans/${a.scan_id}`);
+                navigate(a.url ?? (a.scan_id != null ? `/scans/${a.scan_id}` : '/alerts'));
               }}
             />
           ))}
