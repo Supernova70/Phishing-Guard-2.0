@@ -234,12 +234,19 @@ def _map_ai_signals(hits: Dict[str, _Hit], ai: Dict[str, Any]) -> None:
         # urgency_threat is social engineering pressure, not a technique.
 
     lookalike = ai.get("lookalike") or {}
+    seen_matches: set = set()
     for match in lookalike.get("matches") or []:
         if not isinstance(match, dict):
             continue
         domain = match.get("domain") or "unknown domain"
         brand = match.get("brand") or "a known brand"
         reason = match.get("reason") or "lookalike domain"
+        # The lookalike engine checks sender/reply-to/every URL separately,
+        # so the same match can repeat; count each impersonation once.
+        key = (domain, brand, reason)
+        if key in seen_matches:
+            continue
+        seen_matches.add(key)
         _add(
             hits,
             "T1656",
