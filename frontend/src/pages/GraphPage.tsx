@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, Share2, AlertCircle, X, ExternalLink } from 'lucide-react';
+import { RefreshCw, Share2, AlertCircle, X, ExternalLink, Download } from 'lucide-react';
 import ForceGraph2d from 'react-force-graph-2d';
 import { getGraph, getCampaigns, type GraphData, type GraphNode, type Campaign } from '../api/forensics';
 
@@ -144,6 +144,24 @@ export function GraphPage() {
             <RefreshCw size={12} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             Reload
           </button>
+          <a
+            className="btn-ghost"
+            href={`/api/export/stix${campaignId ? `?campaign_id=${campaignId}` : ''}`}
+            download
+            title="Download this account's indicators as a STIX 2.1 bundle"
+            style={{ fontSize: '0.75rem', padding: '5px 12px', textDecoration: 'none' }}
+          >
+            <Download size={12} /> STIX 2.1
+          </a>
+          <a
+            className="btn-ghost"
+            href={`/api/export/csv${campaignId ? `?campaign_id=${campaignId}` : ''}`}
+            download
+            title="Download this account's indicators as CSV"
+            style={{ fontSize: '0.75rem', padding: '5px 12px', textDecoration: 'none' }}
+          >
+            <Download size={12} /> CSV
+          </a>
         </div>
       </div>
 

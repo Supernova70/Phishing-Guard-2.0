@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Search,
   Save,
+  Download,
 } from 'lucide-react';
 import {
   getCampaigns,
@@ -140,6 +141,26 @@ function CampaignDetailPage() {
               {campaign.last_seen ? formatDistanceToNow(new Date(campaign.last_seen), { addSuffix: true }) : '—'}
             </p>
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          <a
+            className="btn-ghost"
+            href={`/api/export/stix?campaign_id=${campaign.id}`}
+            download
+            title="Export this campaign's indicators as a STIX 2.1 bundle"
+            style={{ fontSize: '0.72rem', padding: '5px 12px', textDecoration: 'none' }}
+          >
+            <Download size={12} /> Export STIX 2.1
+          </a>
+          <a
+            className="btn-ghost"
+            href={`/api/export/csv?campaign_id=${campaign.id}`}
+            download
+            title="Export this campaign's indicators as CSV"
+            style={{ fontSize: '0.72rem', padding: '5px 12px', textDecoration: 'none' }}
+          >
+            <Download size={12} /> CSV
+          </a>
         </div>
       </div>
 
