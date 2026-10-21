@@ -207,6 +207,32 @@ class ScanService:
                 domains.append(ur.original_url)
             lk_result = analyze_lookalike([d for d in domains if d])
 
+            # ── 2d. Identity-phishing layer (shadow) ──────────────
+            identity_result = None
+            try:
+                from app.engines.identity import IdentityContext, analyze_identity
+                from app.services.finding_service import persist_analyzer_result
+
+                identity_result = analyze_identity(
+                    IdentityContext(
+                        sender=email.sender or "",
+                        reply_to=reply_to,
+                        return_path=(headers_map.get("return-path") or [None])[0],
+                        message_id=email.message_id,
+                        subject=email.subject or "",
+                        body_text=text,
+                        dmarc_result=header_result.auth.dmarc_result,
+                        spf_result=header_result.auth.spf_result,
+                        dkim_result=header_result.auth.dkim_result,
+                        lookalike=lk_result,
+                    )
+                )
+                persist_analyzer_result(self.db, scan, identity_result, commit=False)
+            except Exception as exc:  # identity layer must never fail a scan
+                logger.error(
+                    "Identity analysis failed for email %s: %s", email.id, exc
+                )
+
             # ── 3. Attachment Analysis ────────────────────────────
             attachment_analyzer = AttachmentAnalyzer()
             att_result = attachment_analyzer.analyze(email.attachments)
@@ -473,6 +499,19 @@ class ScanService:
                             "status": "disabled",
                             "finding_count": 0,
                         }
+                    ),
+                    "identity": (
+                        {
+                            "shadow": True,
+                            "status": identity_result.status,
+                            "score": round(identity_result.risk_score, 1),
+                            "finding_count": len(identity_result.findings),
+                            "codes": [
+                                finding.code for finding in identity_result.findings
+                            ],
+                        }
+                        if identity_result is not None
+                        else {"shadow": True, "status": "error", "finding_count": 0}
                     ),
                 },
             )

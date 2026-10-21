@@ -590,7 +590,10 @@ function ConversationCard({ scanId }: { scanId: number }) {
         if (!active) return;
         if (findingsResult.status === 'fulfilled') {
           const conversationFindings = findingsResult.value.findings.filter(
-            (item) => item.category === 'thread' || item.category === 'bec',
+            (item) =>
+              item.category === 'thread' ||
+              item.category === 'bec' ||
+              item.category === 'identity',
           );
           setFindings(conversationFindings);
           setConversation(findingsResult.value.conversation);
@@ -616,7 +619,7 @@ function ConversationCard({ scanId }: { scanId: number }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <MessageSquare size={17} style={{ color: 'var(--primary)' }} />
         <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-          Conversation Analysis
+          Identity &amp; Conversation
         </p>
         <span style={{
           fontSize: '0.62rem',
