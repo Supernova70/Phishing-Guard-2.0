@@ -34,6 +34,38 @@ from app.models.url_result import UrlResult
 logger = logging.getLogger(__name__)
 
 
+def _to_url_row(scan_id: int, ur) -> UrlResult:
+    """Map one engine URL result to its persistence row."""
+    return UrlResult(
+        scan_id=scan_id,
+        original_url=ur.original_url,
+        normalized_url=ur.normalized_url,
+        is_shortener=ur.is_shortener,
+        heuristic_score=ur.heuristic_score,
+        vt_score=ur.vt_score,
+        final_score=ur.final_score,
+        vt_malicious=ur.vt_malicious,
+        vt_suspicious=ur.vt_suspicious,
+        vt_harmless=ur.vt_harmless,
+        vt_total=ur.vt_total,
+        vt_error=ur.vt_error,
+        heuristic_flags=ur.heuristic_flags,
+        dynamic_score=ur.dynamic_score,
+        redirect_chain=ur.redirect_chain,
+        dom_has_login_form=ur.dom_has_login_form,
+        ssl_valid=ur.ssl_valid,
+        playwright_screenshot_path=ur.playwright_screenshot_path,
+        dynamic_status=ur.dynamic_status,
+        dynamic_flags=ur.dynamic_flags,
+        dynamic_error=ur.dynamic_error,
+        final_url=ur.final_url,
+        external_form_action=ur.external_form_action,
+        download_attempted=ur.download_attempted,
+        popup_attempted=ur.popup_attempted,
+        dynamic_elapsed_ms=ur.dynamic_elapsed_ms,
+    )
+
+
 class ScanService:
     """Orchestrates the full email analysis pipeline."""
 
@@ -139,36 +171,7 @@ class ScanService:
 
             # Persist each URL result row
             for ur in url_result.per_url_results:
-                db_url = UrlResult(
-                    scan_id=scan.id,
-                    original_url=ur.original_url,
-                    normalized_url=ur.normalized_url,
-                    is_shortener=ur.is_shortener,
-                    heuristic_score=ur.heuristic_score,
-                    vt_score=ur.vt_score,
-                    final_score=ur.final_score,
-                    vt_malicious=ur.vt_malicious,
-                    vt_suspicious=ur.vt_suspicious,
-                    vt_harmless=ur.vt_harmless,
-                    vt_total=ur.vt_total,
-                    vt_error=ur.vt_error,
-                    heuristic_flags=ur.heuristic_flags,
-                    dynamic_score=ur.dynamic_score,
-                    redirect_chain=ur.redirect_chain,
-                    dom_has_login_form=ur.dom_has_login_form,
-                    ssl_valid=ur.ssl_valid,
-                    playwright_screenshot_path=ur.playwright_screenshot_path,
-                    # Dynamic detail columns (migration 0003)
-                    dynamic_status=ur.dynamic_status,
-                    dynamic_flags=ur.dynamic_flags,
-                    dynamic_error=ur.dynamic_error,
-                    final_url=ur.final_url,
-                    external_form_action=ur.external_form_action,
-                    download_attempted=ur.download_attempted,
-                    popup_attempted=ur.popup_attempted,
-                    dynamic_elapsed_ms=ur.dynamic_elapsed_ms,
-                )
-                self.db.add(db_url)
+                self.db.add(_to_url_row(scan.id, ur))
 
             # ── 2b. BEC categories + lookalike domains (rules) ────
             headers_map = self._headers_for(email)
@@ -189,6 +192,62 @@ class ScanService:
             attachment_analyzer = AttachmentAnalyzer()
             att_result = attachment_analyzer.analyze(email.attachments)
             attachment_score = att_result.attachment_score
+
+            # ── 3b. Quishing: score URLs hidden in QR codes ───────
+            # Attachment analysis decoded QR/barcodes. Their URLs go through
+            # the same URL engine (heuristics, VT, dynamic browser) and are
+            # merged into the primary result so persistence, breakdown and
+            # scoring treat them like any other link.
+            qr_codes = []
+            qr_urls = []
+            for file_entry in att_result.per_file_results:
+                for code in file_entry.get("qr_codes") or []:
+                    qr_codes.append(code)
+                    code_url = code.get("url")
+                    if code_url and code_url not in qr_urls:
+                        qr_urls.append(code_url)
+
+            qr_analysis = None
+            if qr_urls:
+                qr_analysis = url_analyzer.analyze(
+                    "",
+                    "",
+                    scan_id=scan.id,
+                    sender_domain=domain_of(email.sender) if email.sender else None,
+                    sender_authenticated=envelope_validated,
+                    extra_urls=qr_urls,
+                )
+                for ur in qr_analysis.per_url_results:
+                    self.db.add(_to_url_row(scan.id, ur))
+                url_result.per_url_results.extend(qr_analysis.per_url_results)
+                for high_risk in qr_analysis.high_risk_urls:
+                    if high_risk not in url_result.high_risk_urls:
+                        url_result.high_risk_urls.append(high_risk)
+                url_result.total_urls += qr_analysis.total_urls
+                url_result.analyzed_urls += qr_analysis.analyzed_urls
+                url_result.vt_checked_urls += qr_analysis.vt_checked_urls
+                url_result.url_score = max(
+                    url_result.url_score, qr_analysis.url_score
+                )
+                url_score = url_result.url_score
+
+                # A QR code can target a lookalike domain that never appears
+                # in the body; run impersonation detection on it too.
+                qr_lookalike = analyze_lookalike(qr_urls)
+                if qr_lookalike.score > 0:
+                    seen_matches = {
+                        (m.domain, m.brand) for m in lk_result.matches
+                    }
+                    for match in qr_lookalike.matches:
+                        if (match.domain, match.brand) not in seen_matches:
+                            lk_result.matches.append(match)
+                            seen_matches.add((match.domain, match.brand))
+                    for flag in qr_lookalike.flags:
+                        if flag not in lk_result.flags:
+                            lk_result.flags.append(flag)
+                    if qr_lookalike.score > lk_result.score:
+                        lk_result.score = qr_lookalike.score
+                        lk_result.matched_brand = qr_lookalike.matched_brand
 
             # Combined AI signal: strongest of ML / BEC / lookalike
             # (ML label stays authoritative; flags record other drivers).
@@ -362,6 +421,18 @@ class ScanService:
                         "analyzed_files": att_result.analyzed_files,
                         "high_risk_files": att_result.high_risk_files,
                         "per_file": att_result.per_file_results,
+                    },
+                    "qr": {
+                        "present": bool(qr_codes),
+                        "code_count": len(qr_codes),
+                        "url_count": len(qr_urls),
+                        "codes": qr_codes[:10],
+                        "score": round(qr_analysis.url_score, 1)
+                        if qr_analysis
+                        else 0.0,
+                        "high_risk_urls": qr_analysis.high_risk_urls
+                        if qr_analysis
+                        else [],
                     },
                     "header": {
                         "score": header_result.score,

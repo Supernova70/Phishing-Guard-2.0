@@ -33,6 +33,7 @@ from app.engines.analyzers.pe_analyzer import analyze_pe
 from app.engines.analyzers.pdf_analyzer import analyze_pdf
 from app.engines.analyzers.office_analyzer import analyze_office
 from app.engines.analyzers.generic_analyzer import analyze_generic, DOUBLE_EXT_PATTERN
+from app.engines.analyzers.qr_analyzer import analyze_attachment_bytes
 from app.engines.analyzers.yara_scanner import YaraScanner
 from app.engines.analyzers.file_types import classify_bucket
 from app.integrations.virustotal import VirusTotalClient
@@ -138,6 +139,7 @@ class AttachmentAnalyzer:
                 "mime_mismatch": file_result.mime_mismatch,
                 "findings": file_result.findings,
                 "indicators": file_result.indicators,
+                "qr_codes": file_result.indicators.get("qr_codes", []),
                 "score_breakdown": file_result.score_breakdown,
                 "embedded_urls": file_result.indicators.get("embedded_urls", []),
                 "yara_matches": file_result.indicators.get("yara_matches", []),
@@ -229,6 +231,36 @@ class AttachmentAnalyzer:
                 "points": round(file_result.risk_score, 1),
                 "detail": "; ".join(file_result.findings[:2]) or "format-specific heuristics",
             })
+
+        # ── Quishing: decode QR/barcodes in images and PDFs ───────
+        # The decoded payload is preserved for forensics and its URLs are
+        # scored by the URL engine later in the pipeline; QR presence alone
+        # is not risk (legitimate documents carry QR codes too).
+        try:
+            qr_summary = analyze_attachment_bytes(data, filename)
+        except Exception as exc:  # pragma: no cover - decoder edge case
+            logger.debug("QR decode failed for '%s': %s", filename, exc)
+            qr_summary = {"codes": [], "urls": [], "count": 0}
+        if qr_summary["count"]:
+            file_result.indicators["qr_codes"] = qr_summary["codes"]
+            file_result.indicators["qr_urls"] = qr_summary["urls"]
+            breakdown.append({
+                "signal": "QR / barcode payload",
+                "points": 0.0,
+                "detail": (
+                    f"{qr_summary['count']} symbol(s) decoded; "
+                    f"{len(qr_summary['urls'])} URL(s) sent to the URL engine"
+                ),
+            })
+            for url in qr_summary["urls"][:3]:
+                file_result.findings.append(
+                    f"QR code in '{filename}' decodes to URL: {url}"
+                )
+            if not qr_summary["urls"]:
+                preview = qr_summary["codes"][0]["value"][:80]
+                file_result.findings.append(
+                    f"QR/barcode in '{filename}' decodes to non-URL payload: {preview}"
+                )
 
         if mime_mismatch:
             file_result.findings.insert(
