@@ -115,18 +115,37 @@ for i in $(seq 1 60); do
     sleep 3
 done
 
-# Frontend one-shot build: wait until it finishes (recreated only when code changed)
-FC_ID=$(sg docker -c "$COMPOSE ps -q frontend-build" 2>/dev/null || true)
+# Frontend one-shot build: wait until it finishes, then verify it published.
+# `ps -a` is required because the publisher exits as soon as the copy is done.
+FC_ID=$(sg docker -c "$COMPOSE ps -aq frontend-build" 2>/dev/null || true)
 if [ -n "$FC_ID" ]; then
     FC_STATUS=$(docker inspect -f '{{.State.Status}}' "$FC_ID" 2>/dev/null || echo "unknown")
-    if [ "$FC_STATUS" = "running" ]; then
+    if [ "$FC_STATUS" = "running" ] || [ "$FC_STATUS" = "created" ] || [ "$FC_STATUS" = "restarting" ]; then
         echo -e "${YELLOW}Frontend build in progress (waiting up to 5 min)...${NC}"
         for i in $(seq 1 60); do
             FC_STATUS=$(docker inspect -f '{{.State.Status}}' "$FC_ID" 2>/dev/null || echo "gone")
-            [ "$FC_STATUS" != "running" ] && break
-            sleep 5
+            case "$FC_STATUS" in
+                running|created|restarting) sleep 5 ;;
+                *) break ;;
+            esac
         done
     fi
+
+    FC_EXIT=$(docker inspect -f '{{.State.ExitCode}}' "$FC_ID" 2>/dev/null || echo "1")
+    if [ "$FC_STATUS" != "exited" ] || [ "$FC_EXIT" != "0" ]; then
+        echo -e "${RED}Frontend build/publish failed (status=$FC_STATUS, exit=$FC_EXIT).${NC}"
+        sg docker -c "docker logs --tail 40 $FC_ID" 2>/dev/null || true
+        exit 1
+    fi
+    echo -e "${GREEN}Frontend build published successfully.${NC}"
+else
+    echo -e "${RED}Frontend publish container was not created.${NC}"
+    exit 1
+fi
+
+if ! sg docker -c "docker exec pg-nginx test -s /usr/share/nginx/html/index.html"; then
+    echo -e "${RED}nginx cannot see the published frontend index.${NC}"
+    exit 1
 fi
 
 sg docker -c "$COMPOSE ps"
