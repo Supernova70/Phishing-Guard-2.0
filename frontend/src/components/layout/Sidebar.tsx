@@ -238,16 +238,7 @@ export function Sidebar({
             <p style={{ fontSize: '0.79rem', fontWeight: 750, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.25 }}>
               Phishing-Guard
             </p>
-            <span
-              className="font-mono"
-              style={{
-                fontSize: '0.58rem',
-                color: 'var(--text-muted)',
-                letterSpacing: '0.04em',
-              }}
-            >
-              SOC CONSOLE · 2.0
-            </span>
+            <span className="brand-tagline">SOC CONSOLE · 2.0</span>
           </div>
         </div>
         <button

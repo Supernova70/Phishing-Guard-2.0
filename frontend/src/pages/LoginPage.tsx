@@ -234,7 +234,7 @@ export function LoginPage() {
             </div>
             <div>
               <p style={{ fontSize: '0.86rem', fontWeight: 750, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Phishing-Guard</p>
-              <p className="font-mono" style={{ fontSize: '0.58rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>SOC CONSOLE · 2.0</p>
+              <p className="brand-tagline">SOC CONSOLE · 2.0</p>
             </div>
           </div>
 

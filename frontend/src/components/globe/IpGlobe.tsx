@@ -264,11 +264,11 @@ export default function IpGlobe() {
         </div>
       </div>
 
-      <div ref={wrapRef} className="globe-canvas-wrap" style={{ position: 'relative', height: webglAvailable ? 500 : 300 }}>
+      <div ref={wrapRef} className="globe-canvas-wrap globe-stage" style={{ position: 'relative', height: webglAvailable ? 500 : 300 }}>
         {!webglAvailable ? (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-muted)', padding: 24, textAlign: 'center' }}>
-            <Globe2 size={30} style={{ color: 'var(--text-faint)' }} />
-            <p style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-secondary)' }}>3D globe unavailable</p>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--globe-stage-text)', padding: 24, textAlign: 'center' }}>
+            <Globe2 size={30} style={{ color: 'var(--globe-stage-text-faint)' }} />
+            <p style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--globe-stage-text-strong)' }}>3D globe unavailable</p>
             <p style={{ fontSize: '0.76rem' }}>WebGL is disabled in this browser. IP origin data is still available in the scan detail and trace views.</p>
           </div>
         ) : size.w > 0 && size.h > 0 && (
@@ -327,7 +327,7 @@ export default function IpGlobe() {
               justifyContent: 'center',
               gap: 8,
               fontSize: '0.8rem',
-              color: 'var(--text-muted)',
+              color: 'var(--globe-stage-text-muted)',
               pointerEvents: 'none',
             }}
           >
@@ -345,7 +345,7 @@ export default function IpGlobe() {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '0.8rem',
-              color: 'var(--text-muted)',
+              color: 'var(--globe-stage-text-muted)',
               pointerEvents: 'none',
               textAlign: 'center',
               padding: 24,

@@ -106,6 +106,11 @@
   --globe-surface:      linear-gradient(160deg, #ffffff 0%, #f8fbff 58%, #f1f7ff 100%);
   --globe-header-bg:    rgba(255, 255, 255, 0.64);
   --globe-legend-bg:    rgba(255, 255, 255, 0.80);
+  --globe-stage-bg:     radial-gradient(circle at 50% 44%, rgba(37, 99, 235, 0.16), transparent 48%), radial-gradient(ellipse at 50% 42%, #142741 0%, #0a1524 58%, #070f1c 100%);
+  --globe-stage-text:        #dbe7f5;
+  --globe-stage-text-strong: #f1f5f9;
+  --globe-stage-text-muted:  #a9bad0;
+  --globe-stage-text-faint:  #7e93ad;
   --login-bg:           radial-gradient(900px 520px at 10% -10%, rgba(37, 99, 235, 0.10), transparent 62%), radial-gradient(700px 480px at 92% 18%, rgba(8, 145, 178, 0.06), transparent 60%), var(--bg-page);
   --chart-grid:         #e8edf5;
   --skeleton-a:         #eef2f8;
@@ -215,6 +220,11 @@
   --globe-surface:      radial-gradient(ellipse at 50% 38%, #11223a 0%, #0a1524 56%, #08101c 100%);
   --globe-header-bg:    rgba(15, 24, 41, 0.60);
   --globe-legend-bg:    rgba(11, 20, 36, 0.78);
+  --globe-stage-bg:     transparent;
+  --globe-stage-text:        var(--text-secondary);
+  --globe-stage-text-strong: var(--text-primary);
+  --globe-stage-text-muted:  var(--text-muted);
+  --globe-stage-text-faint:  var(--text-faint);
   --login-bg:           radial-gradient(900px 520px at 10% -10%, rgba(96, 165, 250, 0.12), transparent 62%), radial-gradient(700px 480px at 92% 18%, rgba(34, 211, 238, 0.07), transparent 60%), var(--bg-page);
   --chart-grid:         #1d2b40;
   --skeleton-a:         #142033;
@@ -295,6 +305,18 @@ h1, h2, h3, h4 {
 .font-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+.brand-tagline {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .text-muted { color: var(--text-muted); }
@@ -1098,6 +1120,10 @@ input[type="radio"] {
   gap: 20px;
 }
 
+.globe-stage {
+  background: var(--globe-stage-bg);
+}
+
 @media (max-width: 760px) {
   .globe-canvas-wrap { height: 360px !important; }
 }
@@ -1414,6 +1440,11 @@ input[type="radio"] {
     --globe-surface: #ffffff;
     --globe-header-bg: #ffffff;
     --globe-legend-bg: #ffffff;
+    --globe-stage-bg: #ffffff;
+    --globe-stage-text: #374151;
+    --globe-stage-text-strong: #111827;
+    --globe-stage-text-muted: #6b7280;
+    --globe-stage-text-faint: #9ca3af;
     --login-bg: #ffffff;
   }
 
