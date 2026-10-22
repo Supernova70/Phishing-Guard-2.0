@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
+import { TiltCard } from '../effects/TiltCard';
 
 type Tone = 'neutral' | 'primary' | 'danger' | 'warning' | 'safe';
 
@@ -49,6 +50,7 @@ export function StatTile({
   icon,
   tone = 'primary',
   onClick,
+  tilt = false,
 }: {
   label: string;
   value: ReactNode;
@@ -56,13 +58,21 @@ export function StatTile({
   icon?: ReactNode;
   tone?: Tone;
   onClick?: () => void;
+  /** Enable a restrained pointer tilt (dashboard KPIs only). */
+  tilt?: boolean | number;
 }) {
   const t = toneStyles[tone];
-  const Tag = onClick ? 'button' : 'div';
+  const tiltIntensity = typeof tilt === 'number' ? tilt : 6;
   return (
-    <Tag
+    <TiltCard
+      as={onClick ? 'button' : 'div'}
+      type="button"
       onClick={onClick}
+      enabled={Boolean(tilt)}
+      intensity={tiltIntensity}
+      glow={Boolean(tilt)}
       className="metric-tile"
+      ariaLabel={`${label}: ${typeof value === 'string' || typeof value === 'number' ? value : ''}`.trim()}
       style={{
         textAlign: 'left',
         padding: '17px 18px',
@@ -75,7 +85,6 @@ export function StatTile({
         minWidth: 0,
         fontFamily: 'inherit',
       }}
-      {...(onClick ? { type: 'button' as const } : {})}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, position: 'relative', zIndex: 1 }}>
         <span className="section-label" style={{ fontSize: '0.64rem' }}>{label}</span>
@@ -104,7 +113,7 @@ export function StatTile({
         </span>
         {detail && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{detail}</span>}
       </div>
-    </Tag>
+    </TiltCard>
   );
 }
 

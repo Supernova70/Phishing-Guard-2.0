@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
+import { CustomCursor } from './components/effects/CustomCursor';
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { EmailInbox } from './pages/EmailInbox';
@@ -69,9 +71,11 @@ function ProtectedLayout() {
 
 export default function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <SystemHealthProvider>
       <AuthProvider>
         <BrowserRouter>
+          <CustomCursor />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<ProtectedLayout />}>
@@ -107,5 +111,6 @@ export default function App() {
         </BrowserRouter>
       </AuthProvider>
     </SystemHealthProvider>
+    </MotionConfig>
   );
 }

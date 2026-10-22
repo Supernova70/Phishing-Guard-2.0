@@ -81,6 +81,12 @@
   --glass-border: rgba(255, 255, 255, 0.82);
   --glass-shadow: 0 12px 40px rgba(15, 23, 42, 0.10);
 
+  /* Interactive lighting */
+  --tilt-highlight: rgba(255, 255, 255, 0.52);
+  --tilt-tint:      rgba(37, 99, 235, 0.15);
+  --tilt-shadow:    0 22px 52px rgba(15, 23, 42, 0.13), 0 2px 10px rgba(15, 23, 42, 0.05);
+  --ambient-grid:   rgba(37, 99, 235, 0.055);
+
   /* Theme-aware chrome */
   --header-bg:          rgba(255, 255, 255, 0.82);
   --sidebar-bg:         rgba(255, 255, 255, 0.88);
@@ -183,6 +189,12 @@
   --glass-bg:     rgba(15, 24, 41, 0.72);
   --glass-border: rgba(148, 163, 184, 0.16);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+  /* Interactive lighting */
+  --tilt-highlight: rgba(255, 255, 255, 0.13);
+  --tilt-tint:      rgba(96, 165, 250, 0.22);
+  --tilt-shadow:    0 24px 60px rgba(0, 0, 0, 0.52), 0 2px 10px rgba(0, 0, 0, 0.32);
+  --ambient-grid:   rgba(148, 163, 184, 0.05);
 
   /* Theme-aware chrome */
   --header-bg:          rgba(10, 17, 30, 0.82);
@@ -455,6 +467,130 @@ h1, h2, h3, h4 {
   pointer-events: none;
 }
 
+/* ─── Pointer light + tilt ──────────────────────────────────────────────────── */
+.tilt-card-frame {
+  width: 100%;
+  min-width: 0;
+}
+
+.tilt-card {
+  position: relative;
+  isolation: isolate;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.tilt-card.is-active {
+  box-shadow: var(--tilt-shadow);
+}
+
+.tilt-card > :not(.tilt-glow) {
+  position: relative;
+  z-index: 1;
+}
+
+.tilt-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
+.tilt-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ─── Custom cursor ─────────────────────────────────────────────────────────── */
+html.has-custom-cursor,
+html.has-custom-cursor body,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+
+html.has-custom-cursor input[type="text"],
+html.has-custom-cursor input[type="search"],
+html.has-custom-cursor input[type="email"],
+html.has-custom-cursor input[type="password"],
+html.has-custom-cursor input[type="url"],
+html.has-custom-cursor input[type="tel"],
+html.has-custom-cursor input[type="number"],
+html.has-custom-cursor input[type="date"],
+html.has-custom-cursor input[type="datetime-local"],
+html.has-custom-cursor input[type="month"],
+html.has-custom-cursor input[type="time"],
+html.has-custom-cursor input[type="week"],
+html.has-custom-cursor input:not([type]),
+html.has-custom-cursor textarea,
+html.has-custom-cursor [contenteditable="true"] {
+  cursor: text !important;
+}
+
+html.has-custom-cursor select,
+html.has-custom-cursor input[type="checkbox"],
+html.has-custom-cursor input[type="radio"],
+html.has-custom-cursor input[type="range"],
+html.has-custom-cursor input[type="color"],
+html.has-custom-cursor input[type="file"],
+html.has-custom-cursor [data-native-cursor] {
+  cursor: pointer !important;
+}
+
+.custom-cursor-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0;
+  /* Blend the whole overlay with the page, not inside its own stacking
+     context — otherwise the white cursor disappears over light surfaces. */
+  mix-blend-mode: difference;
+}
+
+.custom-cursor-layer.is-visible {
+  opacity: 1;
+}
+
+.custom-cursor-layer.is-native {
+  opacity: 0 !important;
+}
+
+.custom-cursor-ring-wrap,
+.custom-cursor-dot-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
+
+.custom-cursor-ring {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.96);
+}
+
+.custom-cursor-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .custom-cursor-layer { display: none !important; }
+}
+
 .divider {
   height: 1px;
   background: var(--border-subtle);
@@ -701,6 +837,15 @@ input[type="radio"] {
 
 .btn-danger:hover { background: var(--danger-hover); border-color: var(--danger-hover); }
 
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover,
+  .btn-secondary:hover,
+  .btn-ghost:hover,
+  .btn-danger:hover {
+    transform: translateY(-1px);
+  }
+}
+
 .btn-icon {
   width: 34px;
   height: 34px;
@@ -776,15 +921,80 @@ input[type="radio"] {
 }
 
 .app-main {
+  position: relative;
+  isolation: isolate;
   flex: 1;
   overflow: auto;
   background: transparent;
   scroll-behavior: smooth;
 }
 
+.app-main::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--ambient-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ambient-grid) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(ellipse 88% 76% at 50% 8%, #000 0%, rgba(0, 0, 0, 0.62) 46%, transparent 82%);
+  mask-image: radial-gradient(ellipse 88% 76% at 50% 8%, #000 0%, rgba(0, 0, 0, 0.62) 46%, transparent 82%);
+  opacity: 0.9;
+}
+
+.app-main::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(560px circle at 14% 4%, var(--primary-glow), transparent 66%),
+    radial-gradient(460px circle at 96% 18%, rgba(8, 145, 178, 0.045), transparent 62%);
+}
+
 .app-page {
+  position: relative;
+  z-index: 1;
   height: 100%;
   min-height: 100%;
+}
+
+.login-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.login-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--ambient-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ambient-grid) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 78% at 50% 4%, #000 0%, rgba(0, 0, 0, 0.55) 48%, transparent 84%);
+  mask-image: radial-gradient(ellipse 90% 78% at 50% 4%, #000 0%, rgba(0, 0, 0, 0.55) 48%, transparent 84%);
+  opacity: 0.9;
+}
+
+.login-shell > div {
+  z-index: 1;
+}
+
+.login-shell::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(620px circle at 10% 0%, var(--primary-glow), transparent 66%),
+    radial-gradient(520px circle at 94% 24%, rgba(8, 145, 178, 0.045), transparent 64%);
 }
 
 .app-sidebar {
@@ -851,12 +1061,22 @@ input[type="radio"] {
 @media (max-width: 900px) {
   .login-shell {
     grid-template-columns: 1fr !important;
-    overflow: auto !important;
+    grid-template-rows: max-content max-content !important;
+    align-content: start;
+    height: 100vh !important;
+    height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .login-shell > div:first-child {
+  .login-shell > div:nth-child(2) {
+    overflow: visible !important;
     padding-bottom: 10px !important;
   }
+
+  .login-orbit { display: none !important; }
 }
 
 @media (max-width: 760px) {
@@ -1108,6 +1328,10 @@ input[type="radio"] {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+
+  .custom-cursor-layer { display: none !important; }
+  html.has-custom-cursor,
+  html.has-custom-cursor * { cursor: auto !important; }
 }
 
 /* ─── Print / Save-as-PDF ───────────────────────────────────────────────────── */
@@ -1119,6 +1343,15 @@ input[type="radio"] {
     overflow: visible !important;
     background: #ffffff !important;
   }
+
+  .custom-cursor-layer,
+  .app-main::before,
+  .app-main::after,
+  .login-shell::before,
+  .login-shell::after { display: none !important; }
+
+  html.has-custom-cursor,
+  html.has-custom-cursor * { cursor: auto !important; }
 
   body { overflow: visible !important; color: #111827 !important; }
 

@@ -20,6 +20,8 @@ import { AttributionDonut } from '../components/charts/AttributionDonut';
 import { useCountUp } from '../hooks/useCountUp';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { StatTile } from '../components/ui/primitives';
+import { Reveal } from '../components/effects/Reveal';
+import { TiltCard } from '../components/effects/TiltCard';
 import { ThreatTimeline } from '../components/charts/ThreatTimeline';
 import { ClassificationDonut } from '../components/charts/ClassificationDonut';
 import { formatDistanceToNow } from 'date-fns';
@@ -54,6 +56,7 @@ function KpiCard({ title, value, icon, tone, subtitle, delay = 0 }: KpiCardProps
         detail={subtitle}
         icon={icon}
         tone={tone}
+        tilt={6}
       />
     </motion.div>
   );
@@ -275,7 +278,11 @@ function ModelHealthCard() {
   );
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
+    <TiltCard
+      className="surface"
+      intensity={3.5}
+      style={{ padding: 20, borderRadius: 14 }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Brain size={17} style={{ color: 'var(--primary)' }} />
@@ -360,7 +367,7 @@ function ModelHealthCard() {
           </div>
         </div>
       )}
-    </div>
+    </TiltCard>
   );
 }
 
@@ -449,12 +456,17 @@ export function Dashboard() {
       </div>
 
       {/* Forensics intel strip */}
-      <IntelStrip spoofCount={spoofCount} openCampaigns={openCampaigns} topCountries={topCountries} attribution={attribution} />
+      <Reveal delay={0.02}>
+        <IntelStrip spoofCount={spoofCount} openCampaigns={openCampaigns} topCountries={topCountries} attribution={attribution} />
+      </Reveal>
 
       {/* Human-in-the-loop model metrics */}
-      <ModelHealthCard />
+      <Reveal delay={0.05}>
+        <ModelHealthCard />
+      </Reveal>
 
       {/* Timeline + Donut */}
+      <Reveal delay={0.08}>
       <div className="dashboard-split">
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '17px 17px 9px', minWidth: 0, boxShadow: 'var(--shadow-card)' }}>
           <p className="section-label" style={{ marginBottom: 12 }}>
@@ -473,8 +485,10 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+      </Reveal>
 
       {/* 3D threat globe */}
+      <Reveal delay={0.1}>
       <Suspense
         fallback={
           <div
@@ -497,8 +511,10 @@ export function Dashboard() {
       >
         <IpGlobe />
       </Suspense>
+      </Reveal>
 
       {/* Recent Activity */}
+      <Reveal delay={0.12}>
       <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
         <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <p style={{ fontSize: '0.9rem', fontWeight: 680, color: 'var(--text-primary)' }}>Recent scan activity</p>
@@ -522,6 +538,7 @@ export function Dashboard() {
           <RecentActivity scans={scans} emails={emails} onViewScan={(id) => navigate(`/scans/${id}`)} />
         </div>
       </div>
+      </Reveal>
     </div>
   );
 }

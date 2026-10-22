@@ -38,6 +38,7 @@ export function Header({
   // ── Global search (header palette) ────────────────────────
   const searchRef = useRef<HTMLInputElement>(null);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -84,6 +85,23 @@ export function Header({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // Close the account menu on any outside pointer press or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     if (mobileSearch) {
@@ -397,7 +415,7 @@ export function Header({
           </div>
 
           {user && (
-            <div style={{ position: 'relative' }}>
+            <div ref={accountMenuRef} style={{ position: 'relative' }}>
               <button
                 onClick={() => setMenuOpen((o) => !o)}
                 aria-label="Account menu"
@@ -452,10 +470,6 @@ export function Header({
 
               {menuOpen && (
                 <>
-                  <div
-                    onClick={() => setMenuOpen(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 30 }}
-                  />
                   <div
                     className="popover-surface"
                     style={{

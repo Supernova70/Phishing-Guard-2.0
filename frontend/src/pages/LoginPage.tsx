@@ -10,6 +10,7 @@ import {
 } from '../api/auth';
 import { useAuth } from '../auth/AuthContext';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { TiltCard } from '../components/effects/TiltCard';
 
 interface GisId {
   initialize(opts: {
@@ -174,6 +175,7 @@ export function LoginPage() {
       >
         <div
           aria-hidden="true"
+          className="login-orbit"
           style={{
             position: 'absolute',
             width: 620,
@@ -187,6 +189,7 @@ export function LoginPage() {
         />
         <div
           aria-hidden="true"
+          className="login-orbit"
           style={{
             position: 'absolute',
             width: 390,
@@ -199,6 +202,7 @@ export function LoginPage() {
         />
         <div
           aria-hidden="true"
+          className="login-orbit"
           style={{
             position: 'absolute',
             width: 10,
@@ -276,21 +280,24 @@ export function LoginPage() {
       >
         <motion.div
           {...(reduceMotion ? {} : { initial: { opacity: 0, y: 18, scale: 0.985 }, animate: { opacity: 1, y: 0, scale: 1 }, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } })}
-          style={{
-            width: '100%',
-            maxWidth: 420,
-            background: 'var(--glass-bg)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: 20,
-            padding: 'clamp(26px, 3.2vw, 38px)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 20,
-            boxShadow: 'var(--shadow-float)',
-            backdropFilter: 'blur(26px) saturate(175%)',
-            WebkitBackdropFilter: 'blur(26px) saturate(175%)',
-          }}
+          style={{ width: '100%', maxWidth: 420 }}
         >
+          <TiltCard
+            intensity={3}
+            style={{
+              width: '100%',
+              background: 'var(--glass-bg)',
+              border: '1px solid var(--glass-border)',
+              borderRadius: 20,
+              padding: 'clamp(26px, 3.2vw, 38px)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+              boxShadow: 'var(--shadow-float)',
+              backdropFilter: 'blur(26px) saturate(175%)',
+              WebkitBackdropFilter: 'blur(26px) saturate(175%)',
+            }}
+          >
           <div>
             <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--primary-soft)', border: '1px solid var(--primary-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
               <Lock size={18} style={{ color: 'var(--primary)' }} />
@@ -381,6 +388,7 @@ export function LoginPage() {
               Terms of Service
             </a>
           </div>
+          </TiltCard>
         </motion.div>
       </div>
     </div>

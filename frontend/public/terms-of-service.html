@@ -3,27 +3,36 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#f3f6fb" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <title>Terms of Service — Phishing-Guard 2.0</title>
-<style>
-  :root { color-scheme: dark; }
-  body { margin:0; background:#0a0e17; color:#d1d5db; font:15px/1.7 Inter,system-ui,sans-serif; }
-  .wrap { max-width:760px; margin:0 auto; padding:48px 24px 72px; }
-  h1 { color:#f3f4f6; font-size:1.7rem; margin:0 0 4px; }
-  h2 { color:#93c5fd; font-size:1.05rem; margin:34px 0 8px; }
-  .muted { color:#6b7280; font-size:.85rem; }
-  a { color:#60a5fa; }
-  .top { display:flex; align-items:center; gap:10px; margin-bottom:26px; }
-  .mark { width:32px; height:32px; background:rgba(59,130,246,.15); border:1px solid #3B82F6; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; color:#3B82F6; }
-  ul { padding-left:20px; } li { margin:4px 0; }
-  .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:8px 26px 20px; }
-</style>
+<script>
+  (function () {
+    var theme = 'light';
+    try {
+      var saved = localStorage.getItem('pg-theme');
+      if (saved === 'dark' || saved === 'light') theme = saved;
+    } catch (e) { /* storage unavailable */ }
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#080e1a' : '#f3f6fb');
+  })();
+</script>
+<link rel="stylesheet" href="/legal.css" />
+<script src="/legal-theme.js" defer></script>
 </head>
 <body>
+<button id="themeToggle" class="theme-btn" type="button" aria-label="Switch to dark mode" aria-pressed="false" title="Switch to dark mode">
+  <svg class="icon-sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+  <svg class="icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  <span id="themeToggleLabel">Light mode</span>
+</button>
 <div class="wrap">
   <div class="top">
     <div class="mark">&#128737;</div>
     <div>
-      <strong style="color:#f3f4f6">Phishing-Guard 2.0</strong>
+      <strong>Phishing-Guard 2.0</strong>
       <div class="muted">AI-Powered Email Threat Detection, Geolocation and Forensic Intelligence Platform</div>
     </div>
   </div>
