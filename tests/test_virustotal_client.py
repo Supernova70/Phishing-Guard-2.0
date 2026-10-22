@@ -28,6 +28,7 @@ def _response(status: int, json_data: dict | None = None, headers: dict | None =
     resp = MagicMock()
     resp.status_code = status
     resp.headers = headers or {}
+    resp.text = ""
     resp.json.return_value = json_data or {}
     return resp
 
@@ -119,10 +120,23 @@ class TestKeyRotation:
         assert req.call_args_list[1].kwargs["headers"]["x-apikey"] == "good"
 
     def test_all_keys_invalid_returns_auth_error(self):
-        with _client_returns(_response(401), _response(403)):
+        with _client_returns(_response(401), _response(401)):
             status, _, err = VirusTotalClient(keys=["a", "b"]).get("/files/abc")
         assert status == 401
         assert err == AUTH_ERROR
+
+    def test_403_is_terminal_and_does_not_invalidate_key(self):
+        """A 403 is not a bad-credential response; valid keys must survive it."""
+        with _client_returns(_response(403)) as mock:
+            status, data, err = VirusTotalClient(keys=["valid"]).get("/files/abc")
+        assert status == 403
+        assert data is None
+        assert "403" in err
+        req = mock.return_value.__enter__.return_value.request
+        assert req.call_count == 1
+        st = VirusTotalClient(keys=["valid"]).status()
+        assert st["invalid"] == 0
+        assert st["available"] == 1
 
     def test_404_is_returned_to_caller(self):
         with _client_returns(_response(404)):

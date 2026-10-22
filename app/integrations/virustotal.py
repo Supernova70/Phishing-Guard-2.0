@@ -13,8 +13,13 @@ account) and this client rotates through them automatically:
   * ``429``        → key goes into cooldown (``Retry-After`` honored, else an
                      escalating backoff 2m → 10m → 30m → 1h → 4h) and the
                      NEXT key is tried inside the same call.
-  * ``401``/``403`` → key is marked invalid (permanent) and the next key is
-                     tried.
+  * ``401``        → key is marked invalid (permanent) and the next key is
+                     tried. This is VirusTotal's ``WrongCredentialsError``.
+  * ``403``        → terminal access error for this call, but the key is NOT
+                     marked invalid. VirusTotal uses 403 for endpoint/WAF or
+                     account-level blocks, not for a bad key (bad keys return
+                     401). Marking every key invalid on one 403 was poisoning
+                     the whole pool.
   * all keys exhausted → the call returns a synthesised 429/401 plus a clear
                      message so callers fall back to heuristic-only scoring.
 
@@ -150,14 +155,25 @@ class VirusTotalClient:
             if resp.status_code == 404:
                 return 404, None, None
 
-            if resp.status_code in (401, 403):
+            if resp.status_code == 401:
                 self._mark_invalid(key)
                 saw_auth_failure = True
                 logger.warning(
-                    "VT rejected key #%s (%s…): HTTP %d — marked invalid, trying next key",
-                    self._key_index(key), key[:6], resp.status_code,
+                    "VT rejected key #%s (%s…): HTTP 401 — marked invalid, trying next key",
+                    self._key_index(key), key[:6],
                 )
                 continue
+
+            if resp.status_code == 403:
+                # A 403 is not a wrong-key response. It can be an endpoint
+                # permission, WAF/CDN block or account-level restriction.
+                # Returning it without poisoning the pool keeps valid keys
+                # usable after the temporary block clears.
+                logger.warning(
+                    "VT returned HTTP 403 for key #%s (%s…); key not invalidated: %s",
+                    self._key_index(key), key[:6], resp.text[:180].replace("\n", " "),
+                )
+                return 403, None, "VT access forbidden (HTTP 403) — key not invalidated"
 
             if resp.status_code == 429:
                 self._mark_cooldown(key, resp)
