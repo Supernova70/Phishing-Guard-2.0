@@ -23,7 +23,8 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.14.1",
     "recharts": "^3.8.1",
-    "tailwindcss": "^4.2.2"
+    "tailwindcss": "^4.2.2",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -31,6 +32,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",

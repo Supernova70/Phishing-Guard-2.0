@@ -2,8 +2,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Globe, { type GlobeMethods } from 'react-globe.gl';
 import { useReducedMotion } from 'framer-motion';
 import { Globe2, Loader2 } from 'lucide-react';
+import {
+  AmbientLight,
+  CanvasTexture,
+  DirectionalLight,
+  EquirectangularReflectionMapping,
+  MeshPhysicalMaterial,
+  NoColorSpace,
+  SRGBColorSpace,
+  TextureLoader,
+  Vector2,
+  type ColorSpace,
+  type Material,
+  type Texture,
+} from 'three';
 import { getIpGeo, type IpGeoPoint } from '../../api/forensics';
 import { useTheme } from '../../lib/theme';
+
+const NIGHT_TEXTURE = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
+const TOPOLOGY_TEXTURE = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+const MONO_ALBEDO = '/textures/earth-monochrome.webp';
+const MONO_NORMAL = '/textures/earth-monochrome-normal.png';
+const MONO_ROUGHNESS = '/textures/earth-monochrome-roughness.png';
 
 const COLORS = {
   tor: '#dc2626',
@@ -62,6 +82,82 @@ const LEGEND: Array<{ color: string; label: string }> = [
   { color: COLORS.hosting, label: 'Hosting' },
 ];
 
+function loadMonochromeSurface(material: MeshPhysicalMaterial): () => void {
+  const loader = new TextureLoader();
+  let cancelled = false;
+
+  // A small neutral studio environment gives the ceramic surface a soft
+  // directional sheen without introducing any colour into the scene.
+  const envCanvas = document.createElement('canvas');
+  envCanvas.width = 1024;
+  envCanvas.height = 512;
+  const envContext = envCanvas.getContext('2d');
+  if (envContext) {
+    const sky = envContext.createLinearGradient(0, 0, 0, 512);
+    sky.addColorStop(0, '#fafafa');
+    sky.addColorStop(0.42, '#d6d6d6');
+    sky.addColorStop(0.55, '#858585');
+    sky.addColorStop(1, '#161616');
+    envContext.fillStyle = sky;
+    envContext.fillRect(0, 0, 1024, 512);
+    const hotspot = envContext.createRadialGradient(300, 116, 0, 300, 116, 280);
+    hotspot.addColorStop(0, 'rgba(255,255,255,1)');
+    hotspot.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+    hotspot.addColorStop(1, 'rgba(255,255,255,0)');
+    envContext.fillStyle = hotspot;
+    envContext.fillRect(0, 0, 1024, 512);
+  }
+  const envTexture = new CanvasTexture(envCanvas);
+  envTexture.mapping = EquirectangularReflectionMapping;
+  envTexture.colorSpace = SRGBColorSpace;
+  material.envMap = envTexture;
+  material.envMapIntensity = 0.55;
+  material.needsUpdate = true;
+
+  const apply = (
+    textureUrl: string,
+    colorSpace: ColorSpace,
+    assign: (texture: Texture) => void
+  ) => {
+    loader.load(textureUrl, (texture) => {
+      if (cancelled) {
+        texture.dispose();
+        return;
+      }
+      texture.colorSpace = colorSpace;
+      texture.anisotropy = 8;
+      assign(texture);
+      material.needsUpdate = true;
+    });
+  };
+
+  apply(MONO_ALBEDO, SRGBColorSpace, (texture) => {
+    material.map?.dispose();
+    material.map = texture;
+  });
+  apply(MONO_NORMAL, NoColorSpace, (texture) => {
+    material.normalMap?.dispose();
+    material.normalMap = texture;
+  });
+  apply(MONO_ROUGHNESS, NoColorSpace, (texture) => {
+    material.roughnessMap?.dispose();
+    material.roughnessMap = texture;
+  });
+
+  return () => {
+    cancelled = true;
+    material.map?.dispose();
+    material.normalMap?.dispose();
+    material.roughnessMap?.dispose();
+    material.map = null;
+    material.normalMap = null;
+    material.roughnessMap = null;
+    material.envMap = null;
+    envTexture.dispose();
+    material.needsUpdate = true;
+  };
+}
+
 export default function IpGlobe() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
@@ -82,6 +178,53 @@ export default function IpGlobe() {
       return false;
     }
   });
+
+  // The light-mode globe uses a custom PBR material: a neutral monochrome
+  // albedo, terrain normal map and a roughness map that keeps oceans glossier
+  // than the matte land. Textures are local, so they are cached after first use.
+  const [monochromeMaterial] = useState(() =>
+    new MeshPhysicalMaterial({
+      color: 0xffffff,
+      roughness: 1,
+      metalness: 0.1,
+      clearcoat: 0.32,
+      clearcoatRoughness: 0.42,
+      normalScale: new Vector2(1.0, 1.0),
+      dithering: true,
+    })
+  );
+
+  useEffect(() => () => monochromeMaterial.dispose(), [monochromeMaterial]);
+
+  useEffect(() => {
+    if (isDark) return;
+    return loadMonochromeSurface(monochromeMaterial);
+  }, [isDark, monochromeMaterial]);
+
+  // Sculpt the monochrome Earth with a warm-white key, a low fill and a
+  // restrained rim. Dark mode keeps the original globe lighting untouched.
+  useEffect(() => {
+    if (!ready) return;
+    const globe = globeRef.current;
+    if (!globe) return;
+
+    if (isDark) {
+      globe.lights([
+        new AmbientLight(0xcccccc, Math.PI),
+        new DirectionalLight(0xffffff, 0.6 * Math.PI),
+      ]);
+      return;
+    }
+
+    const ambient = new AmbientLight(0xffffff, 1.05);
+    const key = new DirectionalLight(0xffffff, 2.6);
+    key.position.set(-1.5, 0.9, 1.2);
+    const fill = new DirectionalLight(0xd8d8d8, 0.8);
+    fill.position.set(1.4, -0.4, 0.9);
+    const rim = new DirectionalLight(0xffffff, 1.1);
+    rim.position.set(0.8, 0.5, -1.5);
+    globe.lights([ambient, key, fill, rim]);
+  }, [isDark, ready]);
 
   useEffect(() => {
     let cancelled = false;
@@ -205,16 +348,18 @@ export default function IpGlobe() {
     <section
       style={{
         background: 'var(--globe-surface)',
-        border: '1px solid var(--border-default)',
+        border: isDark ? '1px solid var(--border-default)' : '1px solid #e5e5e5',
         borderRadius: 14,
         overflow: 'hidden',
-        boxShadow: 'var(--shadow-card)',
+        boxShadow: isDark
+          ? 'var(--shadow-card)'
+          : '0 18px 44px rgba(17, 24, 39, 0.06), 0 2px 8px rgba(17, 24, 39, 0.04)',
       }}
     >
       <div
         style={{
           padding: '16px 20px',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: isDark ? '1px solid var(--border-subtle)' : '1px solid #eeeeee',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -235,7 +380,7 @@ export default function IpGlobe() {
               : 'Loading IP intelligence…'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '5px 9px', background: 'var(--globe-legend-bg)', border: '1px solid var(--border-default)', borderRadius: 999 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '5px 9px', background: 'var(--globe-legend-bg)', border: isDark ? '1px solid var(--border-default)' : '1px solid #e5e5e5', borderRadius: 999 }}>
           {LEGEND.map((item) => (
             <span
               key={item.label}
@@ -265,6 +410,23 @@ export default function IpGlobe() {
       </div>
 
       <div ref={wrapRef} className="globe-canvas-wrap globe-stage" style={{ position: 'relative', height: webglAvailable ? 500 : 300 }}>
+        {!isDark && webglAvailable && (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              height: '84%',
+              aspectRatio: '1 / 1',
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              boxShadow:
+                '0 26px 42px -14px rgba(17, 24, 39, 0.20), 0 5px 16px -8px rgba(17, 24, 39, 0.08)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
         {!webglAvailable ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--globe-stage-text)', padding: 24, textAlign: 'center' }}>
             <Globe2 size={30} style={{ color: 'var(--globe-stage-text-faint)' }} />
@@ -277,14 +439,13 @@ export default function IpGlobe() {
             width={size.w}
             height={size.h}
             backgroundColor="rgba(0,0,0,0)"
-            globeImageUrl={
-              isDark
-                ? 'https://unpkg.com/three-globe/example/img/earth-night.jpg'
-                : 'https://unpkg.com/three-globe/example/img/earth-day.jpg'
-            }
-            bumpImageUrl="https://unpkg.com/three-globe/example/img/earth-topology.png"
-            atmosphereColor={isDark ? '#60a5fa' : '#93c5fd'}
-            atmosphereAltitude={0.12}
+            globeMaterial={(isDark ? null : monochromeMaterial) as unknown as Material}
+            globeImageUrl={isDark ? NIGHT_TEXTURE : undefined}
+            bumpImageUrl={isDark ? TOPOLOGY_TEXTURE : undefined}
+            globeCurvatureResolution={isDark ? 4 : 2}
+            atmosphereColor={isDark ? '#60a5fa' : undefined}
+            atmosphereAltitude={isDark ? 0.12 : 0}
+            showAtmosphere={isDark}
             showGraticules={false}
             onGlobeReady={handleReady}
             pointsData={points}
