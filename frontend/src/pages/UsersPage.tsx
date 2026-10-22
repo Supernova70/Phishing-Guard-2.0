@@ -102,7 +102,7 @@ function Toggle({
           borderRadius: '50%',
           background: 'white',
           transition: 'all 200ms',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          boxShadow: 'var(--shadow-xs)',
         }}
       />
     </label>

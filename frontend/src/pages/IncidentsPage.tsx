@@ -277,8 +277,8 @@ export function IncidentsPage() {
   }, [incidents]);
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="incidents-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
+      <div className="incidents-head" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ShieldAlert size={20} style={{ color: 'var(--warning)' }} />
         <div>
           <h1 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Incident Response</h1>
@@ -286,8 +286,8 @@ export function IncidentsPage() {
             Containment is approval-gated. Every transition is audited; execution is an explicit dry run while Gmail remains read-only.
           </p>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{counts.open} open · {counts.dry} dry run</span>
+        <div className="incidents-head-actions" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{counts.open} open · {counts.dry} dry run</span>
           <button onClick={() => refresh()} className="btn-ghost" style={{ fontSize: '0.72rem' }}><RefreshCw size={12} /> Refresh</button>
         </div>
       </div>
@@ -304,7 +304,7 @@ export function IncidentsPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 0.7fr) minmax(420px, 1.3fr)', gap: 18 }}>
+      <div className="incidents-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 0.7fr) minmax(420px, 1.3fr)', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 18 }}>
             <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>New incident</p>

@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Share2, AlertCircle, X, ExternalLink, Download } from 'lucide-react';
 import ForceGraph2d from 'react-force-graph-2d';
 import { getGraph, getCampaigns, type GraphData, type GraphNode, type Campaign } from '../api/forensics';
+import { useTheme } from '../lib/theme';
 
 const TYPE_COLORS: Record<string, string> = {
-  email: '#3b82f6',
-  domain: '#a78bfa',
-  ip: '#f59e0b',
-  hash: '#ef4444',
-  brand: '#ec4899',
-  campaign: '#10b981',
+  email: '#2563eb',
+  domain: '#7c3aed',
+  ip: '#d97706',
+  hash: '#dc2626',
+  brand: '#db2777',
+  campaign: '#059669',
 };
 
 const LEGEND: Array<{ type: string; label: string }> = [
@@ -24,6 +25,7 @@ const LEGEND: Array<{ type: string; label: string }> = [
 
 export function GraphPage() {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function GraphPage() {
   };
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="dashboard-page" style={{ paddingTop: 22 }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -119,7 +121,7 @@ export function GraphPage() {
             <select
               value={campaignId ?? ''}
               onChange={(e) => setCampaignId(e.target.value ? Number(e.target.value) : undefined)}
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 4, color: 'var(--text-primary)', padding: '5px 8px', fontSize: '0.75rem', maxWidth: 220 }}
+              style={{ background: 'var(--input-bg)', border: '1px solid var(--border-default)', borderRadius: 8, color: 'var(--text-primary)', padding: '6px 10px', fontSize: '0.75rem', maxWidth: 230, boxShadow: 'var(--shadow-xs)' }}
             >
               <option value="">all campaigns</option>
               {campaigns.map((c) => (
@@ -178,13 +180,15 @@ export function GraphPage() {
       {/* Canvas */}
       <div
         ref={containerRef}
+        className="graph-canvas"
         style={{
           position: 'relative',
           height: 560,
           background: 'var(--bg-card)',
           border: '1px solid var(--border-default)',
-          borderRadius: 8,
+          borderRadius: 14,
           overflow: 'hidden',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
         {error && (
@@ -207,13 +211,13 @@ export function GraphPage() {
             graphData={graphData}
             width={size.width}
             height={size.height}
-            backgroundColor="#161B24"
+            backgroundColor={isDark ? '#0f1829' : '#ffffff'}
             nodeId="id"
             nodeColor={(n) => TYPE_COLORS[n.type] ?? '#64748b'}
             nodeVal={(n) => Math.max(2, (n.risk ?? 0) / 12)}
             nodeLabel={(n) => `${n.type}: ${n.label} · risk ${n.risk}`}
             nodeRelSize={3}
-            linkColor={() => 'rgba(148,163,184,0.35)'}
+            linkColor={() => (isDark ? 'rgba(148,163,184,0.34)' : 'rgba(100,116,139,0.28)')}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             onNodeClick={handleNodeClick}
@@ -230,12 +234,12 @@ export function GraphPage() {
               top: 12,
               right: 12,
               width: 264,
-              background: 'var(--bg-card, #161B24)',
-              border: '1px solid var(--border-default, #2D3748)',
+              background: 'var(--popover-bg)',
+              border: '1px solid var(--popover-border)',
               borderRadius: 8,
               padding: 14,
               zIndex: 5,
-              boxShadow: '0 10px 30px rgba(0,0,0,0.45)',
+              boxShadow: 'var(--shadow-float)', backdropFilter: 'blur(20px)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
@@ -245,32 +249,32 @@ export function GraphPage() {
               <button
                 onClick={() => setSelected(null)}
                 aria-label="Close node panel"
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 2, display: 'flex' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
               >
                 <X size={14} />
               </button>
             </div>
-            <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary, #E2E8F0)', wordBreak: 'break-word', marginBottom: 6 }}>
+            <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: 6 }}>
               {selected.label}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>risk</span>
-              <div style={{ flex: 1, height: 5, background: '#1E293B', borderRadius: 3, overflow: 'hidden' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>risk</span>
+              <div style={{ flex: 1, height: 5, background: 'var(--border-subtle)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, selected.risk ?? 0))}%`, height: '100%', background: TYPE_COLORS[selected.type] ?? '#64748b' }} />
               </div>
-              <span className="font-mono" style={{ fontSize: '0.68rem', color: 'var(--text-primary, #E2E8F0)' }}>{selected.risk ?? 0}</span>
+              <span className="font-mono" style={{ fontSize: '0.68rem', color: 'var(--text-primary)' }}>{selected.risk ?? 0}</span>
             </div>
 
             {selectedEdges.length > 0 && (
               <div style={{ marginBottom: 10 }}>
-                <p style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                <p style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                   Links ({selectedEdges.length})
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 132, overflowY: 'auto' }}>
                   {selectedEdges.slice(0, 8).map((edge, i) => (
                     <div key={i} style={{ display: 'flex', gap: 6, fontSize: '0.68rem', alignItems: 'baseline' }}>
-                      <span style={{ color: '#94A3B8', minWidth: 78 }}>{edge.relation}</span>
-                      <span style={{ color: 'var(--text-secondary, #CBD5E1)', wordBreak: 'break-all' }}>{edge.otherLabel}</span>
+                      <span style={{ color: 'var(--text-muted)', minWidth: 78 }}>{edge.relation}</span>
+                      <span style={{ color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{edge.otherLabel}</span>
                     </div>
                   ))}
                 </div>
@@ -286,7 +290,7 @@ export function GraphPage() {
                 Open {selected.type} <ExternalLink size={11} />
               </button>
             ) : (
-              <p style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+              <p style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
                 IoC node — open its email from the graph to inspect.
               </p>
             )}

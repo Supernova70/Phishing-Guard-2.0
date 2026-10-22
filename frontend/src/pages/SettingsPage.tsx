@@ -122,7 +122,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+    <div className="settings-page" style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <Settings size={24} style={{ color: 'var(--primary)' }} />
@@ -146,7 +146,7 @@ export function SettingsPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* API Keys Section */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <Key size={18} style={{ color: 'var(--warning)' }} />
             <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>API Keys</h2>
@@ -154,7 +154,7 @@ export function SettingsPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* VirusTotal */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 6 }}>
+            <div className="settings-key-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 10, gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Shield size={16} style={{ color: config?.vt_configured ? 'var(--safe)' : 'var(--text-muted)' }} />
                 <div>
@@ -164,15 +164,15 @@ export function SettingsPage() {
                   </p>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ position: 'relative' }}>
+              <div className="settings-key-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', flex: '1 1 160px', minWidth: 0 }}>
                   <input
                     className="dark-input"
                     type={showVtKey ? 'text' : 'password'}
                     placeholder="Enter API key"
                     value={vtKey}
                     onChange={(e) => setVtKey(e.target.value)}
-                    style={{ width: 200, fontSize: '0.8rem', padding: '6px 32px 6px 10px' }}
+                    style={{ width: '100%', maxWidth: 200, fontSize: '0.8rem', padding: '6px 32px 6px 10px' }}
                   />
                   <button onClick={() => setShowVtKey(!showVtKey)}
                     style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
@@ -187,7 +187,7 @@ export function SettingsPage() {
             </div>
 
             {/* Google Safe Browsing */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 6 }}>
+            <div className="settings-key-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 10, gap: 12, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Shield size={16} style={{ color: config?.gs_browsing_configured ? 'var(--safe)' : 'var(--text-muted)' }} />
                 <div>
@@ -203,13 +203,13 @@ export function SettingsPage() {
 
         {/* Engine Status */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <Brain size={18} style={{ color: 'var(--primary)' }} />
             <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>Engine Status</h2>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div className="settings-engine-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
             {[
               { label: 'ML Model', loaded: config?.ml_model_loaded ?? false, icon: <Brain size={14} /> },
               { label: 'YARA Rules', loaded: config?.yara_enabled ?? false, icon: <Shield size={14} /> },
@@ -229,7 +229,7 @@ export function SettingsPage() {
 
         {/* Scan Configuration */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <Sliders size={18} style={{ color: 'var(--primary)' }} />
             <h2 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>Scan Configuration</h2>
@@ -254,7 +254,7 @@ export function SettingsPage() {
                   position: 'absolute', top: 2, left: autoScan ? 22 : 2,
                   width: 20, height: 20, borderRadius: '50%',
                   background: 'white', transition: 'all 200ms',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  boxShadow: 'var(--shadow-xs)',
                 }} />
               </label>
             </div>
@@ -301,7 +301,7 @@ export function SettingsPage() {
                   position: 'absolute', top: 2, left: dynamicAnalysis ? 22 : 2,
                   width: 20, height: 20, borderRadius: '50%',
                   background: 'white', transition: 'all 200ms',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  boxShadow: 'var(--shadow-xs)',
                 }} />
               </label>
             </div>

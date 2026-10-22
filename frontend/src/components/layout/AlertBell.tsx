@@ -99,11 +99,12 @@ export function AlertBell() {
         aria-label={unread > 0 ? `${unread} unread alerts` : 'Alerts'}
         style={{
           position: 'relative',
-          background: 'transparent',
           border: '1px solid var(--border-default)',
-          borderRadius: 6,
-          padding: '6px 8px',
+          borderRadius: 9,
+          padding: '7px 8px',
           cursor: 'pointer',
+          background: 'var(--bg-card)',
+          boxShadow: 'var(--shadow-xs)',
           color: unread > 0 ? 'var(--warning)' : 'var(--text-muted)',
           display: 'flex',
           alignItems: 'center',
@@ -141,10 +142,12 @@ export function AlertBell() {
             top: 'calc(100% + 8px)',
             right: 0,
             width: 340,
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 8,
-            boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+            background: 'var(--popover-bg)',
+            border: '1px solid var(--popover-border)',
+            borderRadius: 13,
+            boxShadow: 'var(--shadow-float)',
+            backdropFilter: 'blur(22px) saturate(170%)',
+            WebkitBackdropFilter: 'blur(22px) saturate(170%)',
             zIndex: 100,
             overflow: 'hidden',
           }}
@@ -176,10 +179,10 @@ export function AlertBell() {
                     padding: '10px 14px',
                     borderBottom: '1px solid var(--border-subtle)',
                     cursor: 'pointer',
-                    background: a.read ? 'transparent' : 'var(--primary-glow)',
+                    background: a.read ? 'transparent' : 'var(--primary-soft)',
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = a.read ? 'transparent' : 'var(--primary-glow)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = a.read ? 'transparent' : 'var(--primary-soft)')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="font-mono" style={{ fontSize: '0.7rem', fontWeight: 700, color: a.classification === 'dangerous' ? 'var(--danger)' : 'var(--warning)' }}>

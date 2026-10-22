@@ -9,14 +9,14 @@ interface JsonViewerProps {
 function JsonNode({ value, depth = 0 }: { value: unknown; depth?: number }) {
   const [collapsed, setCollapsed] = useState(depth > 2);
 
-  if (value === null) return <span style={{ color: '#6B7280' }}>null</span>;
-  if (value === undefined) return <span style={{ color: '#6B7280' }}>undefined</span>;
+  if (value === null) return <span style={{ color: 'var(--text-faint)' }}>null</span>;
+  if (value === undefined) return <span style={{ color: 'var(--text-faint)' }}>undefined</span>;
   if (typeof value === 'boolean')
-    return <span style={{ color: '#10B981' }}>{String(value)}</span>;
+    return <span style={{ color: 'var(--text-safe)' }}>{String(value)}</span>;
   if (typeof value === 'number')
-    return <span style={{ color: '#F59E0B', fontFamily: 'JetBrains Mono, monospace' }}>{value}</span>;
+    return <span style={{ color: 'var(--text-warning)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</span>;
   if (typeof value === 'string')
-    return <span style={{ color: '#93C5FD' }}>"{value}"</span>;
+    return <span style={{ color: 'var(--primary)' }}>"{value}"</span>;
 
   if (Array.isArray(value)) {
     if (value.length === 0) return <span style={{ color: 'var(--text-muted)' }}>[]</span>;
@@ -67,7 +67,7 @@ function JsonNode({ value, depth = 0 }: { value: unknown; depth?: number }) {
             <div style={{ marginLeft: 16 }}>
               {entries.map(([key, val], i) => (
                 <div key={key}>
-                  <span style={{ color: '#C084FC' }}>"{key}"</span>
+                  <span style={{ color: '#7c3aed' }}>"{key}"</span>
                   <span style={{ color: 'var(--text-muted)' }}>: </span>
                   <JsonNode value={val} depth={depth + 1} />
                   {i < entries.length - 1 && <span style={{ color: 'var(--text-muted)' }}>,</span>}
@@ -121,7 +121,7 @@ export function JsonViewer({ data, title = 'Raw Breakdown' }: JsonViewerProps) {
         </span>
       </button>
       {isOpen && (
-        <div style={{ background: '#0D1117', padding: 16, position: 'relative' }}>
+        <div style={{ background: 'var(--bg-subtle)', borderTop: '1px solid var(--border-subtle)', padding: 16, position: 'relative' }}>
           <button
             onClick={handleCopy}
             style={{

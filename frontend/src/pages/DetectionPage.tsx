@@ -31,9 +31,12 @@ function FindingRow({ finding, onOpen }: { finding: DetectionFinding; onOpen: ()
   return (
     <button
       onClick={onOpen}
+      className="detection-row"
       style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(180px, 1.4fr) minmax(140px, 1fr) 100px 90px',
+        gridAutoFlow: 'row',
+        rowGap: 12,
         gap: 12,
         alignItems: 'center',
         width: '100%',
@@ -113,8 +116,8 @@ export function DetectionPage() {
   };
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="detection-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
+      <div className="detection-head" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <Radar size={20} style={{ color: 'var(--primary)' }} />
         <div>
           <h1 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Detection Coverage</h1>
@@ -139,7 +142,7 @@ export function DetectionPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(100px, 1fr))', gap: 10 }}>
+      <div className="detection-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10 }}>
         <Metric label="Findings" value={summary?.totals.findings ?? 0} />
         <Metric label="Scans affected" value={summary?.totals.scans_with_findings ?? 0} />
         <Metric label="Critical" value={summary?.totals.critical ?? 0} color="var(--danger)" />
@@ -147,7 +150,7 @@ export function DetectionPage() {
         <Metric label="Medium" value={summary?.totals.medium ?? 0} color="var(--primary)" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 0.7fr) minmax(520px, 1.3fr)', gap: 18 }}>
+      <div className="detection-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 0.7fr) minmax(520px, 1.3fr)', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 16 }}>
             <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>Analyzer yield</p>

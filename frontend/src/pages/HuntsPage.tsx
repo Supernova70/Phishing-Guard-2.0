@@ -152,7 +152,7 @@ export function HuntsPage() {
   );
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
+    <div className="hunts-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1400 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <Crosshair size={20} style={{ color: 'var(--primary)' }} />
         <div>
@@ -181,10 +181,10 @@ export function HuntsPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 0.8fr) minmax(420px, 1.2fr)', gap: 18 }}>
+      <div className="hunts-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 0.8fr) minmax(420px, 1.2fr)', gap: 18 }}>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 18 }}>
           <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>New hunt</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="hunts-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <Field label="Since"><input type="datetime-local" value={since} onChange={(e) => setSince(e.target.value)} className="dark-input" /></Field>
             <Field label="Until"><input type="datetime-local" value={until} onChange={(e) => setUntil(e.target.value)} className="dark-input" /></Field>
             <Field label="Classification">
@@ -201,7 +201,7 @@ export function HuntsPage() {
           </div>
 
           <p style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 16, marginBottom: 8 }}>Analyzers</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div className="hunts-analyzers" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             {ANALYZERS.map((item) => (
               <label key={item.id} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
                 <input
@@ -222,7 +222,7 @@ export function HuntsPage() {
           <button
             onClick={create}
             disabled={busy}
-            style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--primary)', color: '#fff', border: 0, borderRadius: 6, padding: '9px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 }}
+            style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--primary)', color: 'var(--primary-contrast)', border: 0, borderRadius: 6, padding: '9px 12px', fontSize: '0.8rem', fontWeight: 700, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.7 : 1 }}
           >
             <Play size={14} /> Start hunt
           </button>
@@ -282,7 +282,7 @@ export function HuntsPage() {
 
           {result && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(100px, 1fr))', gap: 10, marginTop: 14 }}>
+              <div className="hunts-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(100px, 1fr))', gap: 10, marginTop: 14 }}>
                 {[
                   ['Matched scans', result.scans_matched],
                   ['Scanned', result.scans_scanned],

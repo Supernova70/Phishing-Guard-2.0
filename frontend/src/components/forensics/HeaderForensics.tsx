@@ -252,7 +252,7 @@ export function HeaderForensics({ emailId, flags = [], rules = [] }: HeaderForen
               </p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {flags.map((f, i) => (
-                  <span key={i} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: 4, background: 'var(--danger-subtle)', color: 'var(--text-danger)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                  <span key={i} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: 4, background: 'var(--danger-subtle)', color: 'var(--text-danger)', border: '1px solid var(--danger-border)' }}>
                     {f}
                   </span>
                 ))}

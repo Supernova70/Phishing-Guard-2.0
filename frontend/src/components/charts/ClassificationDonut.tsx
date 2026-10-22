@@ -7,9 +7,9 @@ interface ClassificationDonutProps {
 }
 
 const SEGMENTS = [
-  { key: 'dangerous', label: 'Dangerous', color: '#EF4444' },
-  { key: 'suspicious', label: 'Suspicious', color: '#F59E0B' },
-  { key: 'safe', label: 'Safe', color: '#10B981' },
+  { key: 'dangerous', label: 'Dangerous', color: '#DC2626' },
+  { key: 'suspicious', label: 'Suspicious', color: '#D97706' },
+  { key: 'safe', label: 'Safe', color: '#059669' },
 ];
 
 interface DonutTooltipProps {
@@ -24,7 +24,7 @@ const CustomTooltip = ({ active, payload }: DonutTooltipProps) => {
     <div style={{
       background: 'var(--bg-card)',
       border: '1px solid var(--border-default)',
-      borderRadius: 8,
+      borderRadius: 12,
       padding: '8px 12px',
     }}>
       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{name}: </span>
@@ -81,7 +81,7 @@ export function ClassificationDonut({ scans }: ClassificationDonutProps) {
                   key={i}
                   fill={entry.color}
                   stroke="transparent"
-                  style={{ filter: `drop-shadow(0 0 6px ${entry.color}60)` }}
+                  style={{ filter: 'none' }}
                 />
               ))}
             </Pie>

@@ -20,10 +20,10 @@ interface ServiceCardProps {
 
 function ServiceCard({ name, icon, status, detail, variant = 'unknown' }: ServiceCardProps) {
   const colors = {
-    healthy: { text: '#6EE7B7', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)' },
-    error:   { text: '#FCA5A5', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)' },
-    warning: { text: '#FCD34D', bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.25)' },
-    unknown: { text: '#94A3B8', bg: 'rgba(100,116,139,0.1)', border: 'rgba(100,116,139,0.25)' },
+    healthy: { text: 'var(--text-safe)', bg: 'var(--safe-subtle)', border: 'var(--safe-border)' },
+    error:   { text: 'var(--text-danger)', bg: 'rgba(239,68,68,0.1)',   border: 'var(--danger-border)' },
+    warning: { text: 'var(--text-warning)', bg: 'var(--warning-subtle)',  border: 'var(--warning-border)' },
+    unknown: { text: 'var(--text-muted)', bg: 'var(--bg-subtle)', border: 'var(--border-default)' },
   };
   const c = colors[variant];
 
@@ -34,11 +34,13 @@ function ServiceCard({ name, icon, status, detail, variant = 'unknown' }: Servic
       style={{
         background: 'var(--bg-card)',
         border: `1px solid var(--border-default)`,
-        borderRadius: 8,
-        padding: '20px',
+        borderRadius: 14,
+        padding: '18px 20px',
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
+        boxShadow: 'var(--shadow-card)',
+        minWidth: 0,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -62,12 +64,12 @@ function ServiceCard({ name, icon, status, detail, variant = 'unknown' }: Servic
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {variant === 'healthy'
-          ? <CheckCircle size={14} style={{ color: '#10B981' }} />
+          ? <CheckCircle size={14} style={{ color: 'var(--safe)' }} />
           : variant === 'error'
-          ? <AlertCircle size={14} style={{ color: '#EF4444' }} />
-          : <AlertCircle size={14} style={{ color: '#94A3B8' }} />
+          ? <AlertCircle size={14} style={{ color: 'var(--danger)' }} />
+          : <AlertCircle size={14} style={{ color: 'var(--text-muted)' }} />
         }
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
           {detail ?? 'No detail available'}
         </span>
       </div>
@@ -123,31 +125,35 @@ export function HealthPage() {
   }
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="health-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Main Status Banner */}
       <motion.div
+        className="health-banner"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         style={{
-          background: allOk ? 'rgba(16,185,129,0.08)' : health ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)',
-          border: `1px solid ${allOk ? '#10B981' : health ? '#F59E0B' : '#EF4444'}`,
-          borderRadius: 8,
-          padding: '28px 32px',
+          background: allOk ? 'var(--safe-subtle)' : health ? 'var(--warning-subtle)' : 'rgba(239,68,68,0.08)',
+          border: `1px solid ${allOk ? 'var(--safe)' : health ? 'var(--warning)' : 'var(--danger)'}`,
+          borderRadius: 14,
+          padding: '24px 26px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           {allOk
-            ? <CheckCircle size={36} style={{ color: '#10B981' }} />
-            : <AlertTriangle size={36} style={{ color: health ? '#F59E0B' : '#EF4444' }} />
+            ? <CheckCircle size={36} style={{ color: 'var(--safe)' }} />
+            : <AlertTriangle size={36} style={{ color: health ? 'var(--warning)' : 'var(--danger)' }} />
           }
           <div>
             <p style={{
               fontSize: '1.5rem',
               fontWeight: 900,
-              color: allOk ? '#10B981' : health ? '#F59E0B' : '#EF4444',
+              color: allOk ? 'var(--safe)' : health ? 'var(--warning)' : 'var(--danger)',
               textTransform: 'uppercase' as const,
               letterSpacing: '-0.01em',
             }}>
@@ -157,7 +163,7 @@ export function HealthPage() {
               Last checked: {lastUpdated ? lastUpdated.toLocaleTimeString() : '—'} · Auto-refreshes every 30s
             </p>
             {failingComponents.length > 0 && (
-              <p style={{ fontSize: '0.8rem', color: '#FCD34D', marginTop: 6 }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-warning)', marginTop: 6 }}>
                 Failing: {failingComponents.join(', ')}
               </p>
             )}
@@ -247,7 +253,7 @@ export function HealthPage() {
 
       {/* VirusTotal key pool — per-key rotation state */}
       {vtRot?.keys && vtRot.keys.length > 0 && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
           <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
             VirusTotal Key Pool ({vtRot.keys.length})
           </p>
@@ -256,7 +262,9 @@ export function HealthPage() {
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
             {vtRot.keys.map((k) => {
-              const stateColor = k.state === 'ready' ? '#10B981' : k.state === 'cooldown' ? '#F59E0B' : '#EF4444';
+              const stateColor = k.state === 'ready' ? 'var(--text-safe)' : k.state === 'cooldown' ? 'var(--text-warning)' : 'var(--text-danger)';
+              const stateBg = k.state === 'ready' ? 'var(--safe-subtle)' : k.state === 'cooldown' ? 'var(--warning-subtle)' : 'var(--danger-subtle)';
+              const stateBorder = k.state === 'ready' ? 'var(--safe-border)' : k.state === 'cooldown' ? 'var(--warning-border)' : 'var(--danger-border)';
               const stateLabel = k.state === 'cooldown'
                 ? `cooldown ${Math.floor(k.cooldown_remaining / 60)}m ${k.cooldown_remaining % 60}s`
                 : k.state;
@@ -277,8 +285,8 @@ export function HealthPage() {
                     </span>
                     <span style={{
                       fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase' as const,
-                      color: stateColor, background: `${stateColor}1A`,
-                      border: `1px solid ${stateColor}40`, padding: '2px 7px', borderRadius: 4,
+                      color: stateColor, background: stateBg,
+                      border: `1px solid ${stateBorder}`, padding: '2px 7px', borderRadius: 8,
                     }}>
                       {stateLabel}
                     </span>
@@ -292,7 +300,7 @@ export function HealthPage() {
 
       {/* Sparkline History */}
       {history.length > 1 && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
           <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
             Response Time History (last {history.length} checks)
           </p>
@@ -319,7 +327,7 @@ export function HealthPage() {
 
       {/* Version Info */}
       {health?.version && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '14px 20px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '14px 20px', boxShadow: 'var(--shadow-card)' }}>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             Backend version: <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{health.version}</span>
           </p>

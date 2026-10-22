@@ -36,24 +36,20 @@ export function ScoreBar({ score, label, showValue = true, height = 6 }: ScoreBa
         style={{
           width: '100%',
           height,
-          background: 'var(--bg-input)',
-          borderRadius: 3,
+          background: 'var(--border-subtle)',
+          borderRadius: 999,
           overflow: 'hidden',
+          boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.05)',
         }}
       >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${Math.min(score, 100)}%` }}
-          transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           style={{
             height: '100%',
             background: color,
-            borderRadius: 3,
-            boxShadow: score >= 70
-              ? '0 0 8px rgba(239,68,68,0.5)'
-              : score >= 30
-              ? '0 0 8px rgba(245,158,11,0.4)'
-              : '0 0 8px rgba(16,185,129,0.3)',
+            borderRadius: 999,
           }}
         />
       </div>

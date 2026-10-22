@@ -52,13 +52,13 @@ function SenderAvatar({ sender }: { sender: string }) {
 // ─── Scan Status Chip ──────────────────────────────────────────────────────────
 const CHIP_STYLES: Record<string, { label: string; bg: string; color: string; border: string }> = {
   unscanned: { label: 'Unscanned', bg: 'transparent', color: 'var(--text-muted)', border: 'var(--border-default)' },
-  pending: { label: 'Queued', bg: 'rgba(56,189,248,0.10)', color: '#7DD3FC', border: 'rgba(56,189,248,0.45)' },
-  running: { label: 'Scanning…', bg: 'rgba(56,189,248,0.10)', color: '#7DD3FC', border: 'rgba(56,189,248,0.45)' },
-  error: { label: 'Scan failed', bg: 'rgba(239,68,68,0.10)', color: '#FCA5A5', border: 'rgba(239,68,68,0.45)' },
-  safe: { label: 'Safe', bg: 'rgba(16,185,129,0.12)', color: '#6EE7B7', border: 'rgba(16,185,129,0.5)' },
-  suspicious: { label: 'Suspicious', bg: 'rgba(245,158,11,0.12)', color: '#FCD34D', border: 'rgba(245,158,11,0.5)' },
-  dangerous: { label: 'Dangerous', bg: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: 'rgba(239,68,68,0.5)' },
-  scanned: { label: 'Scanned', bg: 'rgba(16,185,129,0.12)', color: '#6EE7B7', border: 'rgba(16,185,129,0.5)' },
+  pending: { label: 'Queued', bg: 'var(--info-subtle)', color: 'var(--text-info)', border: 'var(--info-border)' },
+  running: { label: 'Scanning…', bg: 'var(--info-subtle)', color: 'var(--text-info)', border: 'var(--info-border)' },
+  error: { label: 'Scan failed', bg: 'var(--danger-subtle)', color: 'var(--text-danger)', border: 'var(--danger-border)' },
+  safe: { label: 'Safe', bg: 'var(--safe-subtle)', color: 'var(--text-safe)', border: 'var(--safe-border)' },
+  suspicious: { label: 'Suspicious', bg: 'var(--warning-subtle)', color: 'var(--text-warning)', border: 'var(--warning-border)' },
+  dangerous: { label: 'Dangerous', bg: 'var(--danger-subtle)', color: 'var(--text-danger)', border: 'var(--danger-border)' },
+  scanned: { label: 'Scanned', bg: 'var(--safe-subtle)', color: 'var(--text-safe)', border: 'var(--safe-border)' },
 };
 
 function ScanStatusChip({ email }: { email: Email }) {
@@ -106,9 +106,9 @@ function ScanStatusChip({ email }: { email: Email }) {
 // ─── File Type Icon ─────────────────────────────────────────────────────────────
 function FileTypeIcon({ filename }: { filename: string; contentType: string | null }) {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  if (['pdf'].includes(ext)) return <FileText size={18} style={{ color: '#EF4444' }} />;
-  if (['exe', 'dll', 'bat', 'ps1'].includes(ext)) return <Code size={18} style={{ color: '#F59E0B' }} />;
-  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return <FileText size={18} style={{ color: '#3B82F6' }} />;
+  if (['pdf'].includes(ext)) return <FileText size={18} style={{ color: 'var(--danger)' }} />;
+  if (['exe', 'dll', 'bat', 'ps1'].includes(ext)) return <Code size={18} style={{ color: 'var(--warning)' }} />;
+  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return <FileText size={18} style={{ color: 'var(--primary)' }} />;
   return <File size={18} style={{ color: 'var(--text-muted)' }} />;
 }
 
@@ -246,7 +246,7 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
   };
 
   const configs: Record<ScanState, { label: string; icon: React.ReactNode; bg: string; color: string; border: string }> = {
-    idle:     { label: 'Run Scan',       icon: <ScanSearch size={14} />,  bg: 'var(--primary)',       color: 'white',              border: 'var(--primary)' },
+    idle:     { label: 'Run Scan',       icon: <ScanSearch size={14} />,  bg: 'var(--primary)',       color: 'var(--primary-contrast)', border: 'var(--primary)' },
     scanning: { label: 'Scanning…',      icon: <LoadingDots />,             bg: 'var(--bg-input)',      color: 'var(--primary)',       border: 'var(--primary)' },
     complete: { label: 'Scan Complete',  icon: <CheckCircle size={14} />,  bg: 'var(--safe-subtle)',   color: 'var(--text-safe)',     border: 'var(--safe)' },
     failed:   { label: 'Failed — Retry', icon: <XCircle size={14} />,      bg: 'var(--danger-subtle)', color: 'var(--text-danger)',   border: 'var(--danger)' },
@@ -311,12 +311,12 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
       {/* Error message */}
       {state === 'failed' && scanError && (
         <div style={{
-          border: '1px solid rgba(239,68,68,0.4)',
-          background: 'rgba(239,68,68,0.06)',
+          border: '1px solid var(--danger-border)',
+          background: 'var(--danger-subtle)',
           borderRadius: 6,
           padding: '8px 12px',
           fontSize: '0.78rem',
-          color: '#FCA5A5',
+          color: 'var(--text-danger)',
           display: 'flex',
           alignItems: 'flex-start',
           gap: 8,
@@ -341,7 +341,7 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
             <span className="font-mono" style={{
               fontSize: '1rem',
               fontWeight: 700,
-              color: verdict.final_score >= 70 ? '#EF4444' : verdict.final_score >= 30 ? '#F59E0B' : '#10B981',
+              color: verdict.final_score >= 70 ? 'var(--danger)' : verdict.final_score >= 30 ? 'var(--warning)' : 'var(--safe)',
             }}>
               {verdict.final_score.toFixed(0)}
             </span>
@@ -350,8 +350,8 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
               fontWeight: 600,
               padding: '2px 8px',
               borderRadius: 3,
-              background: verdict.classification === 'dangerous' ? '#EF444420' : verdict.classification === 'suspicious' ? '#F59E0B20' : '#10B98120',
-              color: verdict.classification === 'dangerous' ? '#FCA5A5' : verdict.classification === 'suspicious' ? '#FCD34D' : '#6EE7B7',
+              background: verdict.classification === 'dangerous' ? 'var(--danger-subtle)' : verdict.classification === 'suspicious' ? 'var(--warning-subtle)' : 'var(--safe-subtle)',
+              color: verdict.classification === 'dangerous' ? 'var(--text-danger)' : verdict.classification === 'suspicious' ? 'var(--text-warning)' : 'var(--text-safe)',
               textTransform: 'uppercase' as const,
               letterSpacing: '0.06em',
             }}>

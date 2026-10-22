@@ -46,30 +46,31 @@ function ScanCard({ scan, email, index, onClick }: { scan: Scan; email?: Email; 
         (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-card)';
         (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-default)';
       }}
+      className="scan-card"
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
         borderLeft: `4px solid ${clsColor}`,
-        borderRadius: 8,
-        padding: 20,
+        borderRadius: 14,
+        padding: 18,
         display: 'flex',
         gap: 20,
         cursor: 'pointer',
-        transition: 'all 200ms ease',
+        transition: 'background 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       {/* Score */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 80 }}>
+      <div className="scan-card-score" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 76 }}>
         {v ? (
           <>
             <span
-              className="font-mono"
+              className="font-mono scan-score"
               style={{
-                fontSize: '3rem',
+                fontSize: '2.8rem',
                 fontWeight: 700,
                 lineHeight: 1,
                 color: clsColor,
-                filter: `drop-shadow(0 0 8px ${clsColor}60)`,
               }}
             >
               {v.final_score.toFixed(0)}
@@ -82,8 +83,8 @@ function ScanCard({ scan, email, index, onClick }: { scan: Scan; email?: Email; 
       </div>
 
       {/* Main Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
+      <div className="scan-card-main" style={{ flex: 1, minWidth: 0 }}>
+        <p className="scan-card-subject" style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
           {email?.subject ?? '(no subject)'}
         </p>
         <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
@@ -110,12 +111,12 @@ function ScanCard({ scan, email, index, onClick }: { scan: Scan; email?: Email; 
       </div>
 
       {/* Action */}
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div className="scan-card-action" style={{ display: 'flex', alignItems: 'center' }}>
         <button
           onClick={(e) => { e.stopPropagation(); onClick(); }}
           style={{
-            background: 'var(--primary-glow)',
-            border: '1px solid var(--primary)',
+            background: 'var(--primary-soft)',
+            border: '1px solid var(--primary-border)',
             color: 'var(--primary)',
             borderRadius: 6,
             padding: '6px 14px',
@@ -201,18 +202,18 @@ export function ScanResults() {
   }
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="scans-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Filters */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '14px 20px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="scan-filters" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '14px 20px', display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center', boxShadow: 'var(--shadow-card)' }}>
         {/* Classification */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="scan-filter-group" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 4 }}>Class:</span>
           {(['all', 'dangerous', 'suspicious', 'safe'] as ClassFilter[]).map((f) => (
             <button key={f} onClick={() => setClassFilter(f)} style={{
               padding: '4px 12px',
               borderRadius: 12,
               border: `1px solid ${classFilter === f ? 'var(--primary)' : 'var(--border-default)'}`,
-              background: classFilter === f ? 'var(--primary-glow)' : 'transparent',
+              background: classFilter === f ? 'var(--primary-soft)' : 'transparent',
               color: classFilter === f ? 'var(--primary)' : 'var(--text-muted)',
               fontSize: '0.75rem',
               fontWeight: 600,
@@ -225,14 +226,14 @@ export function ScanResults() {
         </div>
 
         {/* Status */}
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="scan-filter-group" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 4 }}>Status:</span>
           {(['all', 'complete', 'running', 'error'] as StatusFilter[]).map((f) => (
             <button key={f} onClick={() => setStatusFilter(f)} style={{
               padding: '4px 12px',
               borderRadius: 12,
               border: `1px solid ${statusFilter === f ? 'var(--primary)' : 'var(--border-default)'}`,
-              background: statusFilter === f ? 'var(--primary-glow)' : 'transparent',
+              background: statusFilter === f ? 'var(--primary-soft)' : 'transparent',
               color: statusFilter === f ? 'var(--primary)' : 'var(--text-muted)',
               fontSize: '0.75rem',
               fontWeight: 600,

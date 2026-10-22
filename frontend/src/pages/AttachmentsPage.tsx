@@ -22,10 +22,10 @@ import type { QrScanResult } from '../types';
 // ─── File Type Icon ───────────────────────────────────────────────────────────
 function FileTypeIcon({ filename }: { filename: string }) {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  if (['pdf'].includes(ext)) return <FileText size={20} style={{ color: '#EF4444' }} />;
-  if (['exe', 'dll', 'bat', 'ps1', 'cmd'].includes(ext)) return <Code size={20} style={{ color: '#F59E0B' }} />;
-  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return <FileText size={20} style={{ color: '#3B82F6' }} />;
-  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <File size={20} style={{ color: '#8B5CF6' }} />;
+  if (['pdf'].includes(ext)) return <FileText size={20} style={{ color: 'var(--danger)' }} />;
+  if (['exe', 'dll', 'bat', 'ps1', 'cmd'].includes(ext)) return <Code size={20} style={{ color: 'var(--warning)' }} />;
+  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return <FileText size={20} style={{ color: 'var(--primary)' }} />;
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <File size={20} style={{ color: '#7c3aed' }} />;
   return <File size={20} style={{ color: 'var(--text-muted)' }} />;
 }
 
@@ -407,7 +407,7 @@ export function AttachmentsPage() {
   };
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
+    <div className="attachments-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
       {/* Header */}
       <div>
         <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -420,7 +420,7 @@ export function AttachmentsPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div className="attachments-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
         {[
           { label: 'Total', value: stats.total, color: 'var(--primary)' },
           { label: 'Dangerous', value: stats.dangerous, color: 'var(--danger)' },
@@ -448,8 +448,8 @@ export function AttachmentsPage() {
       </div>
 
       {/* Search + Sort */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
+      <div className="attachments-search" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             className="dark-input"
@@ -497,7 +497,7 @@ export function AttachmentsPage() {
 
       {/* Attachment Grid */}
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        <div className="attachments-skeleton" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="skeleton" style={{ height: 120, borderRadius: 8 }} />
           ))}
@@ -513,7 +513,7 @@ export function AttachmentsPage() {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 12 }}>
+        <div className="attachments-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', gap: 12 }}>
           <AnimatePresence>
             {filtered.map((att) => (
               <AttachmentCard key={att.id} att={att} onClick={() => {}} />

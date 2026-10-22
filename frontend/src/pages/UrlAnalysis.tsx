@@ -62,8 +62,8 @@ function UrlRow({ entry, expanded, onExpand }: {
   const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
 
-  const scoreColor = entry.score >= 70 ? '#EF4444' : entry.score >= 30 ? '#F59E0B' : '#10B981';
-  const scoreBg = entry.score >= 70 ? 'rgba(239,68,68,0.12)' : entry.score >= 30 ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)';
+  const scoreColor = entry.score >= 70 ? 'var(--danger)' : entry.score >= 30 ? 'var(--warning)' : 'var(--safe)';
+  const scoreBg = entry.score >= 70 ? 'var(--danger-subtle)' : entry.score >= 30 ? 'var(--warning-subtle)' : 'var(--safe-subtle)';
 
   const displayUrl = entry.url.length > 60 ? entry.url.slice(0, 60) + '…' : entry.url;
   const screenshotUrl = resolveScreenshotUrl(
@@ -77,26 +77,26 @@ function UrlRow({ entry, expanded, onExpand }: {
   if ((entry.vt_total ?? 0) > 0) {
     if (entry.vt_malicious > 0) {
       vtText = `${entry.vt_malicious} malicious`;
-      vtColor = '#FCA5A5';
+      vtColor = 'var(--text-danger)';
     } else if ((entry.vt_suspicious ?? 0) > 0) {
       vtText = `${entry.vt_suspicious} suspicious`;
-      vtColor = '#FCD34D';
+      vtColor = 'var(--text-warning)';
     } else {
       vtText = `Clean (${entry.vt_total} engines)`;
-      vtColor = '#10B981';
+      vtColor = 'var(--safe)';
     }
   } else if (entry.vt_error && entry.vt_error.includes('No API keys')) {
     vtText = 'VT not configured';
-    vtColor = '#F59E0B';
+    vtColor = 'var(--warning)';
   } else if (entry.vt_error && entry.vt_error.includes('rate limit')) {
     vtText = 'Rate limited';
-    vtColor = '#F59E0B';
+    vtColor = 'var(--warning)';
   } else if (entry.vt_error && entry.vt_error.includes('not yet analyzed')) {
     vtText = 'Not yet analyzed';
     vtColor = 'var(--text-muted)';
   } else if (entry.vt_error) {
     vtText = 'VT error';
-    vtColor = '#EF4444';
+    vtColor = 'var(--danger)';
   } else {
     vtText = 'Not checked';
     vtColor = 'var(--text-muted)';
@@ -115,10 +115,10 @@ function UrlRow({ entry, expanded, onExpand }: {
         onClick={onExpand}
         style={{ cursor: 'pointer' }}
         onMouseEnter={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = 'var(--bg-input)')}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = expanded ? 'rgba(99,102,241,0.05)' : '')}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLTableRowElement).style.background = expanded ? 'var(--primary-soft)' : '')}
       >
         <td style={{ maxWidth: 260, padding: '10px 12px' }}>
-          <span title={entry.url} style={{ color: 'var(--text-secondary)', wordBreak: 'break-all', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.72rem' }}>
+          <span title={entry.url} style={{ display: 'block', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.72rem' }}>
             {displayUrl}
           </span>
         </td>
@@ -148,7 +148,7 @@ function UrlRow({ entry, expanded, onExpand }: {
               <span key={i} style={{
                 fontSize: '0.6rem',
                 fontWeight: 600,
-                color: '#94A3B8',
+                color: 'var(--text-muted)',
                 background: 'var(--bg-input)',
                 border: '1px solid var(--border-subtle)',
                 padding: '1px 6px',
@@ -180,7 +180,7 @@ function UrlRow({ entry, expanded, onExpand }: {
 
       {/* Expanded Row */}
       {expanded && (
-        <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+        <tr style={{ background: 'var(--primary-soft)' }}>
           <td colSpan={7} style={{ padding: '12px 16px 20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Full URL + copy */}
@@ -196,7 +196,7 @@ function UrlRow({ entry, expanded, onExpand }: {
                 <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', flex: 1, wordBreak: 'break-all' }}>
                   {entry.url}
                 </span>
-                <button onClick={handleCopy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied ? '#10B981' : 'var(--text-muted)', flexShrink: 0 }}>
+                <button onClick={handleCopy} style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied ? 'var(--safe)' : 'var(--text-muted)', flexShrink: 0 }}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
               </div>
@@ -211,7 +211,7 @@ function UrlRow({ entry, expanded, onExpand }: {
                     {entry.top_flags.map((f, i) => (
                       <span key={i} style={{
                         fontSize: '0.72rem',
-                        color: '#94A3B8',
+                        color: 'var(--text-muted)',
                         background: 'var(--bg-input)',
                         border: '1px solid var(--border-subtle)',
                         padding: '3px 10px',
@@ -242,7 +242,7 @@ function UrlRow({ entry, expanded, onExpand }: {
                   style={{
                     color: entry.vt_error.includes('not yet analyzed')
                       ? 'var(--text-muted)'
-                      : '#FCD34D',
+                      : 'var(--text-warning)',
                     fontSize: '12px',
                     marginTop: '4px',
                   }}
@@ -358,10 +358,10 @@ export function UrlAnalysis() {
   const vtStatus = useMemo(() => {
     if (allUrls.length === 0) return { label: 'No Data', color: 'var(--text-muted)', subtitle: 'Run scans to see VT status' };
     const anyVtRan = allUrls.some((u) => (u.vt_total ?? 0) > 0);
-    if (anyVtRan) return { label: 'Active', color: '#10B981', subtitle: 'VirusTotal checks running' };
+    if (anyVtRan) return { label: 'Active', color: 'var(--safe)', subtitle: 'VirusTotal checks running' };
     const allNoKeys = allUrls.every((u) => u.vt_error && u.vt_error.includes('No API keys'));
-    if (allNoKeys) return { label: 'Not Configured', color: '#F59E0B', subtitle: 'Set VIRUSTOTAL_API_KEYS in .env' };
-    return { label: 'Pending', color: '#3B82F6', subtitle: 'Keys configured, results pending' };
+    if (allNoKeys) return { label: 'Not Configured', color: 'var(--warning)', subtitle: 'Set VIRUSTOTAL_API_KEYS in .env' };
+    return { label: 'Pending', color: 'var(--primary)', subtitle: 'Keys configured, results pending' };
   }, [allUrls]);
 
   // Filter + sort
@@ -391,25 +391,26 @@ export function UrlAnalysis() {
 
   const riskPills: { label: string; value: RiskFilter; color: string }[] = [
     { label: 'All', value: 'all', color: 'var(--primary)' },
-    { label: 'High Risk (≥70)', value: 'high', color: '#EF4444' },
-    { label: 'Medium (30–69)', value: 'medium', color: '#F59E0B' },
-    { label: 'Low (<30)', value: 'low', color: '#10B981' },
+    { label: 'High Risk (≥70)', value: 'high', color: 'var(--danger)' },
+    { label: 'Medium (30–69)', value: 'medium', color: 'var(--warning)' },
+    { label: 'Low (<30)', value: 'low', color: 'var(--safe)' },
   ];
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="url-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* KPI Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="url-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
         <KpiCard title="Total URLs Analyzed" value={totalUrls} accent="var(--primary)" />
-        <KpiCard title="High Risk URLs" value={highRisk} accent="#EF4444" />
-        <KpiCard title="VT Flagged" value={vtFlagged} accent="#F59E0B" />
+        <KpiCard title="High Risk URLs" value={highRisk} accent="var(--danger)" />
+        <KpiCard title="VT Flagged" value={vtFlagged} accent="var(--warning)" />
         {/* VT Status card */}
         <div style={{
           background: 'var(--bg-card)',
           border: `1px solid var(--border-default)`,
           borderLeft: `3px solid ${vtStatus.color}`,
-          borderRadius: 8,
+          borderRadius: 14,
           padding: '16px 20px',
+          boxShadow: 'var(--shadow-card)',
         }}>
           <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>VT Status</p>
           <p className="font-mono" style={{ fontSize: '1rem', fontWeight: 700, color: vtStatus.color, lineHeight: 1.2 }}>{vtStatus.label}</p>
@@ -421,10 +422,11 @@ export function UrlAnalysis() {
       <div style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
-        borderRadius: 8,
+        borderRadius: 14,
         padding: '14px 16px',
         display: 'flex',
         gap: 12,
+        boxShadow: 'var(--shadow-card)',
         alignItems: 'center',
         flexWrap: 'wrap',
       }}>
@@ -441,7 +443,7 @@ export function UrlAnalysis() {
         </div>
 
         {/* Risk pills */}
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {riskPills.map((p) => (
             <button
               key={p.value}
@@ -452,7 +454,7 @@ export function UrlAnalysis() {
                 fontWeight: 600,
                 borderRadius: 12,
                 border: `1px solid ${riskFilter === p.value ? p.color : 'var(--border-default)'}`,
-                background: riskFilter === p.value ? `${p.color}20` : 'transparent',
+                background: riskFilter === p.value ? 'var(--primary-soft)' : 'transparent',
                 color: riskFilter === p.value ? p.color : 'var(--text-muted)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -498,7 +500,7 @@ export function UrlAnalysis() {
       </div>
 
       {/* URL Table */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
         {loading ? (
           <div style={{ padding: 24 }}>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -519,7 +521,7 @@ export function UrlAnalysis() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="dark-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="dark-table url-table" style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
                   <th style={{ padding: '10px 12px', textAlign: 'left' }}>URL</th>

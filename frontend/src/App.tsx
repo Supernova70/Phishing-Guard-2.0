@@ -35,13 +35,27 @@ function ProtectedLayout() {
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
+          gap: 14,
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'var(--bg-base, #0a0e17)',
+          background: 'var(--login-bg)',
         }}
       >
-        <ShieldCheck size={34} style={{ color: '#60a5fa' }} />
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 15,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--brand-tile-bg)',
+            border: '1px solid var(--brand-tile-border)',
+            boxShadow: 'var(--shadow-raised)',
+          }}
+        >
+          <ShieldCheck size={26} style={{ color: 'var(--primary)' }} />
+        </div>
         <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
           Loading Phishing-Guard 2.0…
         </span>

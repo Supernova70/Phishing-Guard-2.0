@@ -7,10 +7,10 @@ interface AttributionDonutProps {
 
 /** kind → label + color for the dashboard attribution split (FE-C5). */
 const KIND_SEGMENTS: Record<string, { label: string; color: string }> = {
-  spoofed_domain: { label: 'Spoofed domain', color: '#EF4444' },
-  compromised_account: { label: 'Compromised account', color: '#F59E0B' },
-  anonymized_infrastructure: { label: 'Anonymized infra', color: '#A78BFA' },
-  direct_actor: { label: 'Direct actor', color: '#EC4899' },
+  spoofed_domain: { label: 'Spoofed domain', color: '#DC2626' },
+  compromised_account: { label: 'Compromised account', color: '#D97706' },
+  anonymized_infrastructure: { label: 'Anonymized infra', color: '#7C3AED' },
+  direct_actor: { label: 'Direct actor', color: '#DB2777' },
   unknown: { label: 'Unknown', color: '#64748B' },
 };
 

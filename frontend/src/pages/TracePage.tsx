@@ -17,7 +17,7 @@ import { getTrace, type TraceResponse, type Hop } from '../api/forensics';
 // Marker without leaflet's default icon assets (breaks under bundlers).
 const originIcon = L.divIcon({
   className: '',
-  html: '<div style="width:16px;height:16px;border-radius:50%;background:#ef4444;border:3px solid #fff;box-shadow:0 0 10px rgba(239,68,68,.9)"></div>',
+  html: '<div style="width:16px;height:16px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 1px 8px rgba(15,23,42,.28)"></div>',
   iconSize: [16, 16],
   iconAnchor: [8, 8],
 });
@@ -25,7 +25,7 @@ const originIcon = L.divIcon({
 // Intermediate hop marker for the cached-geo route polyline (FE-C6).
 const hopIcon = L.divIcon({
   className: '',
-  html: '<div style="width:11px;height:11px;border-radius:50%;background:#3b82f6;border:2px solid #fff;box-shadow:0 0 6px rgba(59,130,246,.8)"></div>',
+  html: '<div style="width:11px;height:11px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 6px rgba(15,23,42,.24)"></div>',
   iconSize: [11, 11],
   iconAnchor: [5, 5],
 });
@@ -365,7 +365,7 @@ export function TracePage() {
               <>
                 <Polyline
                   positions={route}
-                  pathOptions={{ color: '#3b82f6', weight: 3, opacity: 0.85, dashArray: '8 10' }}
+                  pathOptions={{ color: '#2563eb', weight: 3, opacity: 0.75, dashArray: '8 10' }}
                 />
                 {hopCoords.map((p) => (
                   <Marker key={p.idx} position={[p.lat, p.lon]} icon={hopIcon}>

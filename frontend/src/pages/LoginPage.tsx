@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ScanLine } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Shield, Lock, Mail, ScanLine, Radar, Fingerprint, ArrowRight } from 'lucide-react';
 import {
   getAuthConfig,
   postCredential,
@@ -8,6 +9,7 @@ import {
   type AuthConfig,
 } from '../api/auth';
 import { useAuth } from '../auth/AuthContext';
+import { ThemeToggle } from '../components/ui/ThemeToggle';
 
 interface GisId {
   initialize(opts: {
@@ -54,6 +56,7 @@ function GoogleGIcon() {
 export function LoginPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const [config, setConfig] = useState<AuthConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
@@ -97,7 +100,6 @@ export function LoginPage() {
             const detail =
               (err as { response?: { data?: { detail?: string } } })?.response
                 ?.data?.detail;
-            // Unknown accounts fall back to the combined-consent button below.
             if (detail && !detail.includes('Account not found')) {
               setError(detail);
             }
@@ -129,146 +131,257 @@ export function LoginPage() {
 
   const configured = config?.configured ?? false;
 
+  const fade = reduceMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 14 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
+      };
+
+  const features = [
+    { icon: <Radar size={15} />, title: 'Real-time triage', text: 'Live scan state, verdicts and alert streaming in one console.' },
+    { icon: <Fingerprint size={15} />, title: 'Forensic depth', text: 'Headers, routing, IOCs and evidence linked to every decision.' },
+    { icon: <Shield size={15} />, title: 'Read-only by design', text: 'Your mailbox is never modified, moved or deleted.' },
+  ];
+
   return (
     <div
       style={{
         minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background:
-          'radial-gradient(1200px 600px at 20% -10%, rgba(59,130,246,0.12), transparent), var(--bg-base, #0a0e17)',
-        padding: 24,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.1fr) minmax(420px, 0.9fr)',
+        background: 'var(--login-bg)',
+        overflow: 'hidden',
+        position: 'relative',
       }}
+      className="login-shell"
     >
+      <div style={{ position: 'absolute', top: 18, right: 18, zIndex: 20 }}>
+        <ThemeToggle />
+      </div>
+
+      {/* Brand / narrative */}
       <div
         style={{
-          width: '100%',
-          maxWidth: 400,
-          background: 'var(--bg-card, #111827)',
-          border: '1px solid var(--border-default, #1f2937)',
-          borderRadius: 12,
-          padding: '36px 32px',
+          position: 'relative',
+          padding: 'clamp(28px, 5vw, 64px)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 20,
+          justifyContent: 'space-between',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            width: 620,
+            height: 620,
+            right: '-18%',
+            top: '8%',
+            borderRadius: '50%',
+            border: '1px solid var(--primary-ring)',
+            boxShadow: 'inset 0 0 80px var(--primary-glow)',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            width: 390,
+            height: 390,
+            right: '2%',
+            top: '24%',
+            borderRadius: '50%',
+            border: '1px dashed var(--primary-ring)',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            right: '18%',
+            top: '27%',
+            boxShadow: '0 0 0 6px var(--primary-glow)',
+          }}
+        />
+
+        <motion.div {...fade} style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 42 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: 'var(--brand-tile-bg)',
+                border: '1px solid var(--brand-tile-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: 'var(--shadow-raised)',
+              }}
+            >
+              <Shield size={21} style={{ color: 'var(--primary)' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: '0.86rem', fontWeight: 750, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Phishing-Guard</p>
+              <p className="font-mono" style={{ fontSize: '0.58rem', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>SOC CONSOLE · 2.0</p>
+            </div>
+          </div>
+
+          <p className="section-label" style={{ marginBottom: 12 }}>Email threat intelligence</p>
+          <h1 style={{ fontSize: 'clamp(2.1rem, 4.2vw, 3.6rem)', lineHeight: 1.02, letterSpacing: '-0.045em', fontWeight: 760, color: 'var(--text-primary)', maxWidth: 620 }}>
+            See the threat
+            <br />
+            <span style={{ color: 'var(--primary)' }}>before it lands.</span>
+          </h1>
+          <p style={{ marginTop: 20, maxWidth: 500, fontSize: '0.95rem', lineHeight: 1.72, color: 'var(--text-secondary)' }}>
+            An analyst-grade workspace for AI email threat detection, geolocation,
+            attribution and forensic evidence — built for decisions, not dashboards.
+          </p>
+        </motion.div>
+
+        <motion.div
+          {...(reduceMotion ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { delay: 0.18, duration: 0.4 } })}
+          style={{ position: 'relative', zIndex: 1, display: 'grid', gap: 11, maxWidth: 540, marginTop: 40 }}
+        >
+          {features.map((f) => (
+            <div key={f.title} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-card)', border: '1px solid var(--border-default)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0, boxShadow: 'var(--shadow-xs)' }}>
+                {f.icon}
+              </span>
+              <div>
+                <p style={{ fontSize: '0.78rem', fontWeight: 650, color: 'var(--text-primary)' }}>{f.title}</p>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 1, lineHeight: 1.5 }}>{f.text}</p>
+              </div>
+            </div>
+          ))}
+        </motion.div>
+      </div>
+
+      {/* Auth card */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 'clamp(22px, 4vw, 48px)',
+          position: 'relative',
+        }}
+      >
+        <motion.div
+          {...(reduceMotion ? {} : { initial: { opacity: 0, y: 18, scale: 0.985 }, animate: { opacity: 1, y: 0, scale: 1 }, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } })}
+          style={{
+            width: '100%',
+            maxWidth: 420,
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: 20,
+            padding: 'clamp(26px, 3.2vw, 38px)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20,
+            boxShadow: 'var(--shadow-float)',
+            backdropFilter: 'blur(26px) saturate(175%)',
+            WebkitBackdropFilter: 'blur(26px) saturate(175%)',
+          }}
+        >
+          <div>
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--primary-soft)', border: '1px solid var(--primary-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Lock size={18} style={{ color: 'var(--primary)' }} />
+            </div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 730, letterSpacing: '-0.025em', color: 'var(--text-primary)' }}>Sign in to your workspace</h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.6 }}>
+              Use your authorised Google account. Access is governed by your assigned role.
+            </p>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                background: 'var(--danger-subtle)',
+                border: '1px solid var(--danger-border)',
+                color: 'var(--text-danger)',
+                borderRadius: 10,
+                padding: '10px 12px',
+                fontSize: '0.78rem',
+                lineHeight: 1.5,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              if (!configured || signingIn) return;
+              setSigningIn(true);
+              startGoogleSignIn();
+            }}
+            disabled={!configured || configLoading || signingIn}
             style={{
-              width: 32,
-              height: 32,
-              background: 'var(--primary-glow)',
-              border: '1px solid var(--primary)',
-              borderRadius: 8,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: 10,
+              width: '100%',
+              padding: '12px 16px',
+              borderRadius: 10,
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              fontSize: '0.86rem',
+              fontWeight: 650,
+              cursor: configured ? 'pointer' : 'not-allowed',
+              opacity: signingIn ? 0.7 : 1,
+              boxShadow: 'var(--shadow-xs)',
+              transition: 'border-color 140ms ease, box-shadow 140ms ease, transform 100ms ease',
             }}
           >
-            <Shield size={18} style={{ color: 'var(--primary)' }} />
-          </div>
-          <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-            Phishing-Guard 2.0
-          </h1>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.5 }}>
-            AI-Powered Email Threat Detection, Geolocation and Forensic
-            Intelligence Platform
-          </p>
-        </div>
+            <GoogleGIcon />
+            {signingIn ? 'Opening Google…' : 'Continue with Google'}
+            {!signingIn && <ArrowRight size={15} style={{ marginLeft: 'auto', color: 'var(--text-faint)' }} />}
+          </button>
 
-        {error && (
-          <div
-            style={{
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.35)',
-              color: '#fca5a5',
-              borderRadius: 8,
-              padding: '10px 12px',
-              fontSize: '0.78rem',
-            }}
-          >
-            {error}
-          </div>
-        )}
+          {!configLoading && !configured && (
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-warning)', textAlign: 'center', margin: 0, background: 'var(--warning-subtle)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: '8px 10px' }}>
+              Google sign-in is not configured yet. Add a Google Cloud Console client ID to enable access.
+            </p>
+          )}
 
-        <button
-          onClick={() => {
-            if (!configured || signingIn) return;
-            setSigningIn(true);
-            startGoogleSignIn();
-          }}
-          disabled={!configured || configLoading || signingIn}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            width: '100%',
-            padding: '11px 16px',
-            borderRadius: 8,
-            border: configured ? '1px solid #dadce0' : '1px solid var(--border-default)',
-            background: configured ? '#ffffff' : 'var(--bg-panel)',
-            color: configured ? '#3c4043' : 'var(--text-muted)',
-            fontSize: '0.88rem',
-            fontWeight: 600,
-            cursor: configured ? 'pointer' : 'not-allowed',
-            opacity: signingIn ? 0.7 : 1,
-          }}
-        >
-          <GoogleGIcon />
-          {signingIn ? 'Opening Google…' : 'Sign in with Google'}
-        </button>
-
-        {!configLoading && !configured && (
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
-            Google sign-in is not configured yet (P0 — Google Cloud Console
-            client ID).
-          </p>
-        )}
-
-        <div style={{ borderTop: '1px solid var(--border-default)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <Lock size={13} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 2 }} />
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'justify' }}>
-              Private by design.
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+            <span className="section-label" style={{ fontSize: '0.58rem' }}>Secure by design</span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <Mail size={13} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 2 }} />
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'justify' }}>
-              Connect your Gmail securely for read-only phishing analysis.
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <ScanLine size={13} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 2 }} />
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6, textAlign: 'justify' }}>
-              Phishing-Guard 2.0 scans your emails for threats without
-              sending, deleting, or modifying your email.
-            </span>
-          </div>
-        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: '0.68rem' }}>
-          <a
-            href="/privacy-policy.html"
-            target="_blank"
-            rel="noopener"
-            style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
-          >
-            Privacy Policy
-          </a>
-          <span style={{ color: 'var(--border-default)' }}>·</span>
-          <a
-            href="/terms-of-service.html"
-            target="_blank"
-            rel="noopener"
-            style={{ color: 'var(--text-muted)', textDecoration: 'underline' }}
-          >
-            Terms of Service
-          </a>
-        </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Mail size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Read-only Gmail analysis. Nothing is sent or deleted.</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <ScanLine size={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Every verdict keeps its evidence trail.</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 14, fontSize: '0.68rem', marginTop: 2 }}>
+            <a href="/privacy-policy.html" target="_blank" rel="noopener" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+              Privacy Policy
+            </a>
+            <span style={{ color: 'var(--border-default)' }}>·</span>
+            <a href="/terms-of-service.html" target="_blank" rel="noopener" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
+              Terms of Service
+            </a>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

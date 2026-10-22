@@ -38,17 +38,19 @@ function ToastItem({ toast, onRemove }: ToastProps) {
       exit={{ opacity: 0, x: 80, scale: 0.9 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
       style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-default)',
+        background: 'var(--popover-bg)',
+        border: '1px solid var(--popover-border)',
         borderLeft: `3px solid ${borderColors[toast.type]}`,
-        borderRadius: 8,
+        borderRadius: 12,
         padding: '12px 16px',
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
         minWidth: 300,
         maxWidth: 380,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        boxShadow: 'var(--shadow-float)',
+        backdropFilter: 'blur(18px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(160%)',
         position: 'relative',
         overflow: 'hidden',
       }}
@@ -103,12 +105,13 @@ export function ToastContainer({ toasts, removeToast }: ToastContainerProps) {
       className="no-print"
       style={{
         position: 'fixed',
-        top: 20,
+        top: 74,
         right: 20,
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        maxWidth: 'calc(100vw - 32px)',
       }}
     >
       <AnimatePresence mode="popLayout">

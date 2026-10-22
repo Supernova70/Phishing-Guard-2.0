@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   TrendingUp,
   AlertTriangle,
@@ -19,6 +19,7 @@ import { getAlerts, getCampaigns, getIpStats, getAttributionStats, getModelPerfo
 import { AttributionDonut } from '../components/charts/AttributionDonut';
 import { useCountUp } from '../hooks/useCountUp';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
+import { StatTile } from '../components/ui/primitives';
 import { ThreatTimeline } from '../components/charts/ThreatTimeline';
 import { ClassificationDonut } from '../components/charts/ClassificationDonut';
 import { formatDistanceToNow } from 'date-fns';
@@ -33,57 +34,27 @@ interface KpiCardProps {
   title: string;
   value: number;
   icon: React.ReactNode;
-  iconColor: string;
-  borderColor: string;
-  glowColor: string;
+  tone: 'primary' | 'danger' | 'warning' | 'safe';
   subtitle?: string;
-  trend?: string;
   delay?: number;
 }
 
-function KpiCard({ title, value, icon, iconColor, borderColor, glowColor, subtitle, trend, delay = 0 }: KpiCardProps) {
-  const count = useCountUp(value, 1200, delay);
+function KpiCard({ title, value, icon, tone, subtitle, delay = 0 }: KpiCardProps) {
+  const count = useCountUp(value, 1000, delay);
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: delay / 1000, ease: 'easeOut' }}
-      style={{
-        background: 'var(--bg-card)',
-        border: `1px solid var(--border-default)`,
-        borderLeft: `3px solid ${borderColor}`,
-        borderRadius: 8,
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        boxShadow: `inset 0 0 30px ${glowColor}`,
-      }}
+      transition={{ duration: 0.35, delay: delay / 1000, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          {title}
-        </span>
-        <span style={{ color: iconColor }}>{icon}</span>
-      </div>
-      <span className="font-mono" style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>
-        {count.toLocaleString()}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{subtitle}</span>
-        {trend && (
-          <span style={{
-            fontSize: '0.7rem',
-            fontWeight: 600,
-            color: trend.startsWith('+') ? 'var(--text-safe)' : 'var(--text-warning)',
-            background: trend.startsWith('+') ? 'var(--safe-subtle)' : 'var(--warning-subtle)',
-            padding: '1px 6px',
-            borderRadius: 4,
-          }}>
-            {trend}
-          </span>
-        )}
-      </div>
+      <StatTile
+        label={title}
+        value={count.toLocaleString()}
+        detail={subtitle}
+        icon={icon}
+        tone={tone}
+      />
     </motion.div>
   );
 }
@@ -101,13 +72,14 @@ function IntelStrip({ spoofCount, openCampaigns, topCountries, attribution }: In
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: 16,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 18,
         background: 'var(--bg-card)',
         border: '1px solid var(--border-default)',
-        borderRadius: 8,
-        padding: '14px 20px',
+        borderRadius: 14,
+        padding: '18px 20px',
         alignItems: 'center',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -176,7 +148,7 @@ function RecentActivity({ scans, emails, onViewScan }: { scans: Scan[]; emails: 
 
   if (recent.length === 0) {
     return (
-      <div style={{ padding: 48, textAlign: 'center' }}>
+      <div style={{ padding: 42, textAlign: 'center' }}>
         <ShieldCheck size={40} style={{ color: 'var(--safe)', margin: '0 auto 12px' }} />
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No scan activity yet</p>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 4 }}>Run scans on emails to see results here</p>
@@ -253,9 +225,9 @@ function RecentActivity({ scans, emails, onViewScan }: { scans: Scan[]; emails: 
                 <button
                   onClick={(e) => { e.stopPropagation(); onViewScan(scan.id); }}
                   style={{
-                    background: 'var(--primary-glow)',
-                    border: '1px solid var(--primary)',
-                    borderRadius: 4,
+                    background: 'var(--primary-soft)',
+                    border: '1px solid var(--primary-border)',
+                    borderRadius: 7,
                     color: 'var(--primary)',
                     padding: '3px 10px',
                     fontSize: '0.75rem',
@@ -303,7 +275,7 @@ function ModelHealthCard() {
   );
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Brain size={17} style={{ color: 'var(--primary)' }} />
@@ -467,13 +439,13 @@ export function Dashboard() {
   const safeCount = completedScans.filter((s) => s.verdict?.classification === 'safe').length;
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div className="dashboard-page">
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <KpiCard title="Total Emails" value={emails.length} icon={<TrendingUp size={18} />} iconColor="var(--primary)" borderColor="var(--primary)" glowColor="var(--primary-glow)" subtitle="All fetched emails" trend="+12% vs yesterday" delay={0} />
-        <KpiCard title="Threats Detected" value={threatsCount} icon={<AlertTriangle size={18} />} iconColor="var(--danger)" borderColor="var(--danger)" glowColor="var(--danger-glow)" subtitle="High-risk classification" trend={threatsCount > 0 ? `+${threatsCount}` : '0 new'} delay={80} />
-        <KpiCard title="Suspicious" value={suspiciousCount} icon={<AlertCircle size={18} />} iconColor="var(--warning)" borderColor="var(--warning)" glowColor="var(--warning-glow)" subtitle="Requires investigation" delay={160} />
-        <KpiCard title="Clean" value={safeCount} icon={<ShieldCheck size={18} />} iconColor="var(--safe)" borderColor="var(--safe)" glowColor="var(--safe-glow)" subtitle="Safe classification" delay={240} />
+      <div className="dashboard-kpis">
+        <KpiCard title="Total Emails" value={emails.length} icon={<TrendingUp size={16} />} tone="primary" subtitle="All fetched emails" delay={0} />
+        <KpiCard title="Threats Detected" value={threatsCount} icon={<AlertTriangle size={16} />} tone="danger" subtitle="High-risk classification" delay={60} />
+        <KpiCard title="Suspicious" value={suspiciousCount} icon={<AlertCircle size={16} />} tone="warning" subtitle="Requires investigation" delay={120} />
+        <KpiCard title="Clean" value={safeCount} icon={<ShieldCheck size={16} />} tone="safe" subtitle="Safe classification" delay={180} />
       </div>
 
       {/* Forensics intel strip */}
@@ -483,20 +455,20 @@ export function Dashboard() {
       <ModelHealthCard />
 
       {/* Timeline + Donut */}
-      <div style={{ display: 'flex', gap: 16, height: 280 }}>
-        <div style={{ flex: 3, background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 16px 8px', minWidth: 0 }}>
-          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Threat Timeline — Last 7 Days
+      <div className="dashboard-split">
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '17px 17px 9px', minWidth: 0, boxShadow: 'var(--shadow-card)' }}>
+          <p className="section-label" style={{ marginBottom: 12 }}>
+            Threat timeline · last 7 days
           </p>
-          <div style={{ height: 210, minWidth: 0 }}>
+          <div style={{ height: 216, minWidth: 0 }}>
             <ThreatTimeline scans={scans} />
           </div>
         </div>
-        <div style={{ flex: 2, background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px', minWidth: 0 }}>
-          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Classification Breakdown
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 17, minWidth: 0, boxShadow: 'var(--shadow-card)' }}>
+          <p className="section-label" style={{ marginBottom: 12 }}>
+            Classification breakdown
           </p>
-          <div style={{ height: 210, minWidth: 0 }}>
+          <div style={{ height: 216, minWidth: 0 }}>
             <ClassificationDonut scans={scans} />
           </div>
         </div>
@@ -510,12 +482,13 @@ export function Dashboard() {
               height: 500,
               background: 'var(--bg-card)',
               border: '1px solid var(--border-default)',
-              borderRadius: 8,
+              borderRadius: 14,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '0.8rem',
               color: 'var(--text-muted)',
+              boxShadow: 'var(--shadow-card)',
             }}
           >
             Loading globe…
@@ -526,9 +499,9 @@ export function Dashboard() {
       </Suspense>
 
       {/* Recent Activity */}
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Recent Scan Activity</p>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+        <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <p style={{ fontSize: '0.9rem', fontWeight: 680, color: 'var(--text-primary)' }}>Recent scan activity</p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-ghost"

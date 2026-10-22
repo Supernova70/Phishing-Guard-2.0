@@ -129,13 +129,13 @@ export function ReportPage() {
   };
 
   return (
-    <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1000 }}>
+    <div className="report-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1000 }}>
       {/* Top bar */}
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn-ghost" onClick={() => navigate(`/scans/${report.scan.id}`)} style={{ fontSize: '0.8rem' }}>
           <ArrowLeft size={14} /> Back to Scan
         </button>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-input)', padding: '3px 8px', borderRadius: 4 }}>
             REPORT · SCAN #{report.scan.id}
           </span>
@@ -176,7 +176,7 @@ export function ReportPage() {
           gap: 16,
           flexWrap: 'wrap',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <ScoreBadge score={v.final_score} />
             <ClassificationBadge classification={v.classification} />
             <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -209,7 +209,7 @@ export function ReportPage() {
         <Section title="Header Forensics" icon={<FileSearch size={16} />}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: report.received_chain.length ? 14 : 0 }}>
             {((report.header_forensics.flags as string[] | undefined) ?? []).map((f, i) => (
-              <span key={i} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: 4, background: 'var(--danger-subtle)', color: 'var(--text-danger)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <span key={i} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: 4, background: 'var(--danger-subtle)', color: 'var(--text-danger)', border: '1px solid var(--danger-border)' }}>
                 {f}
               </span>
             ))}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { WifiOff } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -51,7 +51,9 @@ export function Layout() {
   const { health, loading: healthLoading } = useSystemHealth();
   const backendOnline = healthLoading ? null : health !== null;
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toasts, toast, removeToast } = useToast();
+  const reduceMotion = useReducedMotion();
 
   // Find current page config (handle dynamic routes like /scans/:id/report)
   const dynamic = DYNAMIC_TITLES.find((d) => d.test.test(location.pathname));
@@ -62,27 +64,40 @@ export function Layout() {
     ? { title: dynamic.title, breadcrumbs: dynamic.crumbs }
     : PAGE_CONFIG[pathKey] ?? PAGE_CONFIG['/'];
 
+
   const handleEmailsFetched = () => setRefreshKey((k) => k + 1);
 
   return (
-    <div className="app-layout" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-page)' }}>
+    <div className="app-layout" style={{ background: 'var(--bg-page)' }}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
       <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
         apiStatus={backendOnline === false ? 'offline' : backendOnline ? 'online' : 'warning'}
         health={health}
       />
 
-      <div className="app-column" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop no-print"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className="app-column">
         {/* Backend Offline Banner */}
         <AnimatePresence>
           {backendOnline === false && (
             <motion.div
               className="app-banner no-print"
-              initial={{ height: 0, opacity: 0 }}
+              initial={reduceMotion ? false : { height: 0, opacity: 0 }}
               animate={{ height: 36, opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              exit={reduceMotion ? undefined : { height: 0, opacity: 0 }}
               style={{
                 background: 'var(--danger-subtle)',
-                borderBottom: '1px solid var(--danger)',
+                borderBottom: '1px solid var(--danger-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -91,7 +106,7 @@ export function Layout() {
               }}
             >
               <WifiOff size={14} style={{ color: 'var(--danger)' }} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-danger)', fontWeight: 600 }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-danger)', fontWeight: 600 }}>
                 Backend Offline — API is not responding
               </span>
             </motion.div>
@@ -104,18 +119,18 @@ export function Layout() {
           onEmailsFetched={handleEmailsFetched}
           toast={toast.success}
           toastError={toast.error}
+          onOpenMenu={() => setSidebarOpen(true)}
         />
 
-        <main className="app-main" style={{ flex: 1, overflow: 'auto', background: 'var(--bg-page)' }}>
+        <main id="main-content" className="app-main" tabIndex={-1}>
           <AnimatePresence mode="wait">
             <motion.div
               className="app-page"
               key={location.pathname}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              style={{ height: '100%' }}
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             >
               <Outlet context={{ refreshKey, toast }} />
             </motion.div>

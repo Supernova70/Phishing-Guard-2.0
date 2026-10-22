@@ -50,9 +50,9 @@ const CustomTooltip = ({ active, payload, label }: TimelineTooltipProps) => {
     <div style={{
       background: 'var(--bg-card)',
       border: '1px solid var(--border-default)',
-      borderRadius: 8,
+      borderRadius: 12,
       padding: '10px 14px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: 'var(--shadow-float)', backdropFilter: 'blur(18px)',
     }}>
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>{label}</p>
       {(payload ?? []).map((p) => (
@@ -61,7 +61,7 @@ const CustomTooltip = ({ active, payload, label }: TimelineTooltipProps) => {
           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
             {p.dataKey}:
           </span>
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: p.stroke, fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
             {p.value}
           </span>
         </div>
@@ -84,16 +84,16 @@ export function ThreatTimeline({ scans }: ThreatTimelineProps) {
         <AreaChart data={data} margin={{ top: 10, right: 4, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="dangerGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#EF4444" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#DC2626" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#DC2626" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="warnGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#D97706" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#D97706" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="safeGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#10B981" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#10B981" stopOpacity={0.02} />
+              <stop offset="5%" stopColor="#059669" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#059669" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
@@ -110,9 +110,9 @@ export function ThreatTimeline({ scans }: ThreatTimelineProps) {
             allowDecimals={false}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey="dangerous" stroke="#EF4444" strokeWidth={2} fill="url(#dangerGrad)" />
-          <Area type="monotone" dataKey="suspicious" stroke="#F59E0B" strokeWidth={2} fill="url(#warnGrad)" />
-          <Area type="monotone" dataKey="safe" stroke="#10B981" strokeWidth={2} fill="url(#safeGrad)" />
+          <Area type="monotone" dataKey="dangerous" stroke="#DC2626" strokeWidth={2} fill="url(#dangerGrad)" />
+          <Area type="monotone" dataKey="suspicious" stroke="#D97706" strokeWidth={2} fill="url(#warnGrad)" />
+          <Area type="monotone" dataKey="safe" stroke="#059669" strokeWidth={2} fill="url(#safeGrad)" />
         </AreaChart>
       </ResponsiveContainer>
     </motion.div>

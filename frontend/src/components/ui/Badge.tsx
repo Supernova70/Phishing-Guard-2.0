@@ -5,47 +5,54 @@ interface BadgeProps {
   size?: 'sm' | 'md';
 }
 
-const config: Record<Classification, { label: string; bg: string; text: string; glow: string }> = {
+const config: Record<Classification, { label: string; bg: string; text: string; border: string; dot: string }> = {
   dangerous: {
     label: 'DANGEROUS',
     bg: 'var(--danger-subtle)',
     text: 'var(--text-danger)',
-    glow: '0 0 10px rgba(239,68,68,0.35)',
+    border: 'var(--danger-border)',
+    dot: 'var(--danger)',
   },
   suspicious: {
     label: 'SUSPICIOUS',
     bg: 'var(--warning-subtle)',
     text: 'var(--text-warning)',
-    glow: '0 0 10px rgba(245,158,11,0.35)',
+    border: 'var(--warning-border)',
+    dot: 'var(--warning)',
   },
   safe: {
     label: 'SAFE',
     bg: 'var(--safe-subtle)',
     text: 'var(--text-safe)',
-    glow: '0 0 10px rgba(16,185,129,0.25)',
+    border: 'var(--safe-border)',
+    dot: 'var(--safe)',
   },
 };
 
 export function ClassificationBadge({ classification, size = 'md' }: BadgeProps) {
   const c = config[classification];
-  const padding = size === 'sm' ? '2px 8px' : '3px 10px';
-  const fontSize = size === 'sm' ? '0.65rem' : '0.7rem';
+  const padding = size === 'sm' ? '2px 8px' : '3px 9px';
+  const fontSize = size === 'sm' ? '0.62rem' : '0.66rem';
 
   return (
     <span
       style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
         background: c.bg,
         color: c.text,
-        boxShadow: c.glow,
+        border: `1px solid ${c.border}`,
         padding,
         fontSize,
         fontWeight: 700,
-        letterSpacing: '0.08em',
-        borderRadius: '4px',
-        display: 'inline-block',
+        letterSpacing: '0.06em',
+        borderRadius: 'var(--radius-pill)',
         whiteSpace: 'nowrap',
+        lineHeight: 1.35,
       }}
     >
+      <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: c.dot, flexShrink: 0 }} />
       {c.label}
     </span>
   );
@@ -62,14 +69,10 @@ export function ScoreBadge({ score, size = 'md' }: ScoreBadgeProps) {
 
   const bg = isHigh ? 'var(--danger-subtle)' : isMid ? 'var(--warning-subtle)' : 'var(--safe-subtle)';
   const text = isHigh ? 'var(--text-danger)' : isMid ? 'var(--text-warning)' : 'var(--text-safe)';
-  const glow = isHigh
-    ? '0 0 12px rgba(239,68,68,0.4)'
-    : isMid
-    ? '0 0 12px rgba(245,158,11,0.4)'
-    : '0 0 12px rgba(16,185,129,0.3)';
+  const border = isHigh ? 'var(--danger-border)' : isMid ? 'var(--warning-border)' : 'var(--safe-border)';
 
-  const fontSizes = { sm: '0.75rem', md: '0.875rem', lg: '1.1rem' };
-  const paddings = { sm: '2px 8px', md: '3px 10px', lg: '4px 12px' };
+  const fontSizes = { sm: '0.72rem', md: '0.84rem', lg: '1.08rem' };
+  const paddings = { sm: '2px 7px', md: '3px 9px', lg: '4px 11px' };
 
   return (
     <span
@@ -77,12 +80,13 @@ export function ScoreBadge({ score, size = 'md' }: ScoreBadgeProps) {
       style={{
         background: bg,
         color: text,
-        boxShadow: glow,
+        border: `1px solid ${border}`,
         padding: paddings[size],
         fontSize: fontSizes[size],
         fontWeight: 700,
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-pill)',
         display: 'inline-block',
+        lineHeight: 1.35,
       }}
     >
       {score.toFixed(1)}
@@ -97,21 +101,22 @@ interface StatusDotProps {
 
 export function StatusDot({ status, pulse = false }: StatusDotProps) {
   const colors = {
-    online: '#10B981',
-    offline: '#EF4444',
-    warning: '#F59E0B',
+    online: 'var(--safe)',
+    offline: 'var(--danger)',
+    warning: 'var(--warning)',
   };
 
   return (
     <span
       style={{
         display: 'inline-block',
-        width: 8,
-        height: 8,
+        width: 7,
+        height: 7,
         borderRadius: '50%',
         backgroundColor: colors[status],
-        boxShadow: `0 0 6px ${colors[status]}`,
-        animation: pulse ? 'glow-pulse 2s ease-in-out infinite' : undefined,
+        color: colors[status],
+        boxShadow: '0 0 0 3px color-mix(in srgb, currentColor 12%, transparent)',
+        animation: pulse ? 'glow-pulse 2.4s ease-in-out infinite' : undefined,
         flexShrink: 0,
       }}
     />

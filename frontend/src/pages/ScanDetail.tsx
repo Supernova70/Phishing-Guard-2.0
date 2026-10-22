@@ -60,7 +60,7 @@ function VerdictFeedbackCard({ scanId, prediction }: { scanId: number; predictio
   };
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <Flag size={16} style={{ color: 'var(--primary)' }} />
         <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -156,49 +156,58 @@ function VerdictHero({ scan }: { scan: Scan }) {
   const isDangerous = cls === 'dangerous';
   const isSuspicious = cls === 'suspicious';
 
-  const bgColor = isDangerous ? 'var(--danger-subtle)' : isSuspicious ? 'var(--warning-subtle)' : 'var(--safe-subtle)';
   const borderColor = isDangerous ? 'var(--danger)' : isSuspicious ? 'var(--warning)' : 'var(--safe)';
   const textColor = isDangerous ? 'var(--danger)' : isSuspicious ? 'var(--warning)' : 'var(--safe)';
-  const animClass = isDangerous ? 'animate-pulse-danger' : isSuspicious ? 'animate-pulse-warning' : '';
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
-      className={animClass}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       style={{
-        background: bgColor,
-        border: `1px solid ${borderColor}`,
-        borderRadius: 8,
-        padding: '28px 32px',
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)',
+        borderLeft: `4px solid ${borderColor}`,
+        borderRadius: 14,
+        padding: '22px 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 24,
+        gap: 22,
+        flexWrap: 'wrap',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div>
-        <p style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.14em', color: textColor, textTransform: 'uppercase', marginBottom: 8 }}>
-          Final Verdict
+      <div style={{ minWidth: 0, flex: '1 1 360px' }}>
+        <p className="section-label" style={{ color: textColor, marginBottom: 8 }}>
+          Final verdict
         </p>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
-          <span style={{ fontSize: '3.5rem', fontWeight: 900, color: textColor, letterSpacing: '-0.02em', lineHeight: 1, textTransform: 'uppercase' }}>
-            {cls}
+        <h2 style={{ fontSize: 'clamp(1.7rem, 3vw, 2.35rem)', fontWeight: 760, color: textColor, letterSpacing: '-0.035em', lineHeight: 1.05, textTransform: 'uppercase' }}>
+          {cls}
+        </h2>
+        <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: 9, lineHeight: 1.6, maxWidth: 560 }}>
+          {isDangerous
+            ? 'This message shows strong phishing indicators. Treat it as hostile and avoid interacting with its links or attachments.'
+            : isSuspicious
+              ? 'This message contains risk signals that need analyst review before it is trusted.'
+              : 'No significant phishing indicators were found. Continue to apply normal sender verification.'}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <span className="pill">
+            <span className="font-mono">SCAN #{scan.id}</span>
           </span>
-          <span className="font-mono" style={{ fontSize: '4.5rem', fontWeight: 700, color: textColor, lineHeight: 1, filter: `drop-shadow(0 0 20px ${borderColor}80)` }}>
-            {v.final_score.toFixed(1)}
+          <span className="pill">
+            {scan.completed_at ? `Scanned ${formatDistanceToNow(new Date(scan.completed_at), { addSuffix: true })}` : 'Scan in progress'}
           </span>
+          <ClassificationBadge classification={cls} size="sm" />
         </div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 10 }}>
-          {scan.completed_at ? `Scanned ${formatDistanceToNow(new Date(scan.completed_at), { addSuffix: true })}` : 'Scan in progress'}
-        </p>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-        <span className="font-mono" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-input)', padding: '3px 8px', borderRadius: 4 }}>
-          SCAN #{scan.id}
-        </span>
-        <ClassificationBadge classification={cls} />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexShrink: 0 }}>
+        <div style={{ textAlign: 'center' }}>
+          <ScoreGauge score={v.final_score} size={150} />
+          <p style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginTop: -2 }}>Composite risk score</p>
+        </div>
       </div>
     </motion.div>
   );
@@ -210,7 +219,7 @@ function EngineCard({ name, score, icon, children }: { name: string; score: numb
   const color = score >= 70 ? 'var(--danger)' : score >= 30 ? 'var(--warning)' : 'var(--safe)';
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ color }}>{icon}</span>
         <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{name}</p>
@@ -278,7 +287,7 @@ function UrlRow({ urlEntry }: { urlEntry: ScanBreakdown['url']['per_url'][0] }) 
                   borderRadius: 4,
                   background: 'var(--danger-subtle)',
                   color: 'var(--text-danger)',
-                  border: '1px solid rgba(239,68,68,0.3)',
+                  border: '1px solid var(--danger-border)',
                 }}>
                   {flag}
                 </span>
@@ -340,7 +349,7 @@ function YaraMatchCard({ match }: { match: {
   return (
     <div style={{
       background: 'var(--danger-subtle)',
-      border: '1px solid rgba(239,68,68,0.3)',
+      border: '1px solid var(--danger-border)',
       borderRadius: 6,
       padding: '10px 14px',
       display: 'flex',
@@ -379,7 +388,7 @@ function YaraMatchCard({ match }: { match: {
           </div>
         )}
         <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.65rem', background: 'rgba(239,68,68,0.2)', color: 'var(--text-danger)', padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>
+          <span style={{ fontSize: '0.65rem', background: 'var(--danger-subtle)', color: 'var(--text-danger)', padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>
             {match.severity.toUpperCase()}
           </span>
           {match.tags.map((t, i) => (
@@ -406,7 +415,7 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
 
   if (loading) {
     return (
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
         <div className="skeleton" style={{ height: 16, width: '30%', borderRadius: 4, marginBottom: 12 }} />
         <div className="skeleton" style={{ height: 12, width: '100%', borderRadius: 4, marginBottom: 8 }} />
         <div className="skeleton" style={{ height: 12, width: '80%', borderRadius: 4 }} />
@@ -433,9 +442,11 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
       animate={{ opacity: 1, y: 0 }}
       style={{
         background: 'var(--bg-card)',
-        border: `1px solid ${borderColor}`,
-        borderRadius: 8,
+        border: '1px solid var(--border-default)',
+        borderTop: `3px solid ${borderColor}`,
+        borderRadius: 14,
         padding: 24,
+        boxShadow: 'var(--shadow-card)',
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
@@ -499,7 +510,7 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
                 borderRadius: 4,
                 background: rf.severity === 'high' ? 'var(--danger-subtle)' : 'var(--warning-subtle)',
                 color: rf.severity === 'high' ? 'var(--text-danger)' : 'var(--text-warning)',
-                border: `1px solid ${rf.severity === 'high' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                border: `1px solid ${rf.severity === 'high' ? 'var(--danger-border)' : 'var(--warning-border)'}`,
               }}>
                 {rf.engine}: {rf.detail}
               </span>
@@ -617,7 +628,7 @@ function ConversationCard({ scanId }: { scanId: number }) {
     severity >= 65 ? 'var(--danger)' : severity >= 30 ? 'var(--warning)' : 'var(--primary)';
 
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <MessageSquare size={17} style={{ color: 'var(--primary)' }} />
         <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -770,7 +781,7 @@ export function ScanDetail() {
 
       {/* Email Info */}
       {email && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: '16px 20px', boxShadow: 'var(--shadow-card)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Email Details</p>
@@ -804,7 +815,7 @@ export function ScanDetail() {
         <>
           <div>
             <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Engine Analysis</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div className="engine-grid" style={{ display: 'grid', gap: 16 }}>
               <EngineCard name="ML Engine" score={v.ai_score ?? 0} icon={<Brain size={16} />}>
                 {bd?.ai && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
@@ -847,7 +858,7 @@ export function ScanDetail() {
 
           {/* URL Analysis */}
           {bd?.url && bd.url.per_url.length > 0 && (
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
               <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Link2 size={16} style={{ color: 'var(--primary)' }} />
                 <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>URL Analysis</p>
@@ -871,7 +882,7 @@ export function ScanDetail() {
                 Attachment Analysis
               </p>
               {bd.attachment.per_file.map((file, i) => (
-                <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+                <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div>
                       <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{file.filename}</p>
@@ -892,7 +903,7 @@ export function ScanDetail() {
                           <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                             <span className="font-mono" style={{
                               fontSize: '0.7rem', fontWeight: 700, flexShrink: 0, minWidth: 44, textAlign: 'right',
-                              color: entry.points >= 60 ? '#EF4444' : entry.points >= 25 ? '#F59E0B' : 'var(--text-muted)',
+                              color: entry.points >= 60 ? 'var(--text-danger)' : entry.points >= 25 ? 'var(--text-warning)' : 'var(--text-muted)',
                             }}>
                               +{entry.points}
                             </span>
@@ -942,7 +953,7 @@ export function ScanDetail() {
                       <span style={{
                         fontFamily: 'JetBrains Mono, monospace',
                         fontSize: '0.72rem',
-                        color: (file.vt_malicious ?? 0) > 0 ? '#EF4444' : '#10B981',
+                        color: (file.vt_malicious ?? 0) > 0 ? 'var(--text-danger)' : 'var(--text-safe)',
                         fontWeight: 700,
                       }}>
                         {(file.vt_malicious ?? 0) > 0
@@ -955,7 +966,7 @@ export function ScanDetail() {
 
                   {/* VT Error */}
                   {file.vt_error && (
-                    <div style={{ fontSize: '0.72rem', color: '#FCD34D', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-warning)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
                       ⚠ VT: {file.vt_error}
                     </div>
                   )}
@@ -971,7 +982,7 @@ export function ScanDetail() {
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 4,
-                          color: '#3B82F6',
+                          color: 'var(--primary)',
                           fontSize: '0.75rem',
                           textDecoration: 'none',
                           fontWeight: 600,
@@ -1009,7 +1020,7 @@ export function ScanDetail() {
 
           {/* Quishing (QR codes hidden in attachments) */}
           {bd?.qr?.present && (
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 14, padding: 20, boxShadow: 'var(--shadow-card)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <QrCode size={16} style={{ color: 'var(--primary)' }} />
                 <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>

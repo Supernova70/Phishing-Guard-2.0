@@ -40,9 +40,10 @@ function ElapsedTimer({ startedAt }: { startedAt: string | null }) {
 // ─── Running Scan Card ─────────────────────────────────────────────────────────
 function RunningCard({ scan }: { scan: Scan }) {
   const isRunning = scan.status === 'running';
-  const statusColor = isRunning ? '#3B82F6' : '#F59E0B';
+  const statusColor = isRunning ? 'var(--primary)' : 'var(--warning)';
   const statusLabel = isRunning ? 'RUNNING' : 'PENDING';
-  const statusBg = isRunning ? 'rgba(59,130,246,0.1)' : 'rgba(245,158,11,0.1)';
+  const statusBg = isRunning ? 'var(--primary-soft)' : 'var(--warning-subtle)';
+  const statusBorder = isRunning ? 'var(--primary-border)' : 'var(--warning-border)';
 
   return (
     <motion.div
@@ -52,7 +53,7 @@ function RunningCard({ scan }: { scan: Scan }) {
       exit={{ opacity: 0, x: 20 }}
       style={{
         background: 'var(--bg-card)',
-        border: `1px solid ${statusColor}40`,
+        border: `1px solid ${statusBorder}`,
         borderRadius: 8,
         padding: '16px 20px',
         display: 'flex',
@@ -83,7 +84,7 @@ function RunningCard({ scan }: { scan: Scan }) {
         fontWeight: 700,
         color: statusColor,
         background: statusBg,
-        border: `1px solid ${statusColor}40`,
+        border: `1px solid ${statusBorder}`,
         padding: '3px 8px',
         borderRadius: 4,
         letterSpacing: '0.08em',
@@ -189,19 +190,19 @@ export function ActiveScans() {
       {/* Section 1: Running Now */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <ScanLine size={16} style={{ color: '#3B82F6' }} />
+          <ScanLine size={16} style={{ color: 'var(--primary)' }} />
           <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
             Running Now
           </h2>
           {runningScans.length > 0 && (
             <span style={{
-              background: '#3B82F620',
-              color: '#60A5FA',
+              background: 'var(--primary-soft)',
+              color: 'var(--primary)',
               fontSize: '0.65rem',
               fontWeight: 700,
               padding: '2px 8px',
               borderRadius: 10,
-              border: '1px solid #3B82F640',
+              border: '1px solid var(--primary-border)',
             }}>
               {runningScans.length}
             </span>
@@ -227,8 +228,8 @@ export function ActiveScans() {
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: '#10B981',
-              boxShadow: '0 0 0 3px #10B98130',
+              background: 'var(--safe)',
+              boxShadow: '0 0 0 3px var(--safe-glow)',
               animation: 'pulse 3s ease-in-out infinite',
               flexShrink: 0,
             }} />
@@ -251,7 +252,7 @@ export function ActiveScans() {
       {completedScans.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <CheckCircle size={16} style={{ color: '#10B981' }} />
+            <CheckCircle size={16} style={{ color: 'var(--safe)' }} />
             <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
               Completed Recently
             </h2>
@@ -309,12 +310,12 @@ export function ActiveScans() {
       {failedScans.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <AlertTriangle size={16} style={{ color: '#EF4444' }} />
+            <AlertTriangle size={16} style={{ color: 'var(--danger)' }} />
             <h2 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
               Failed Scans
             </h2>
           </div>
-          <div style={{ border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--danger-border)', borderRadius: 8, overflow: 'hidden' }}>
             {failedScans.map((scan, i) => (
               <div
                 key={scan.id}
@@ -323,12 +324,12 @@ export function ActiveScans() {
                   alignItems: 'center',
                   gap: 12,
                   padding: '10px 16px',
-                  background: 'rgba(239,68,68,0.05)',
-                  borderBottom: i < failedScans.length - 1 ? '1px solid rgba(239,68,68,0.15)' : 'none',
+                  background: 'var(--danger-subtle)',
+                  borderBottom: i < failedScans.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                 }}
               >
-                <XCircle size={14} style={{ color: '#EF4444', flexShrink: 0 }} />
-                <span className="font-mono" style={{ fontSize: '0.75rem', color: '#FCA5A5' }}>
+                <XCircle size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+                <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-danger)' }}>
                   Email #{scan.email_number ?? scan.email_id} failed
                 </span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -341,10 +342,10 @@ export function ActiveScans() {
                   onClick={() => handleRetry(scan)}
                   disabled={retrying === scan.email_id}
                   style={{
-                    background: 'rgba(239,68,68,0.1)',
-                    border: '1px solid rgba(239,68,68,0.4)',
+                    background: 'var(--danger-subtle)',
+                    border: '1px solid var(--danger-border)',
                     borderRadius: 4,
-                    color: '#FCA5A5',
+                    color: 'var(--text-danger)',
                     padding: '3px 10px',
                     fontSize: '0.7rem',
                     cursor: retrying === scan.email_id ? 'not-allowed' : 'pointer',

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Globe, { type GlobeMethods } from 'react-globe.gl';
+import { useReducedMotion } from 'framer-motion';
+import { Globe2, Loader2 } from 'lucide-react';
 import { getIpGeo, type IpGeoPoint } from '../../api/forensics';
+import { useTheme } from '../../lib/theme';
 
 const COLORS = {
-  tor: '#ef4444',
-  vpn: '#f59e0b',
-  proxy: '#f472b6',
-  hosting: '#a78bfa',
-  dnsbl: '#ef4444',
-  base: '#22d3ee',
+  tor: '#dc2626',
+  vpn: '#d97706',
+  proxy: '#db2777',
+  hosting: '#7c3aed',
+  dnsbl: '#dc2626',
+  base: '#0891b2',
 } as const;
 
 function pointColor(p: IpGeoPoint): string {
@@ -62,6 +65,8 @@ const LEGEND: Array<{ color: string; label: string }> = [
 export default function IpGlobe() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  const reduceMotion = useReducedMotion();
+  const { isDark } = useTheme();
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [points, setPoints] = useState<IpGeoPoint[]>([]);
   const [total, setTotal] = useState(0);
@@ -69,6 +74,14 @@ export default function IpGlobe() {
   const [loaded, setLoaded] = useState(false);
   const [ready, setReady] = useState(false);
   const [hovered, setHovered] = useState<IpGeoPoint | null>(null);
+  const [webglAvailable] = useState(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      return Boolean(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -179,9 +192,9 @@ export default function IpGlobe() {
   useEffect(() => {
     const controls = globeRef.current?.controls();
     if (!controls) return;
-    controls.autoRotate = !hovered;
-    controls.autoRotateSpeed = 0.55;
-  }, [hovered, ready, size.w, points]);
+    controls.autoRotate = !hovered && !reduceMotion;
+    controls.autoRotateSpeed = 0.5;
+  }, [hovered, ready, size.w, points, reduceMotion]);
 
   const handleReady = () => {
     globeRef.current?.pointOfView({ lat: 22, lng: 32, altitude: 1.7 }, 0);
@@ -191,34 +204,30 @@ export default function IpGlobe() {
   return (
     <section
       style={{
-        background: 'var(--bg-card)',
+        background: 'var(--globe-surface)',
         border: '1px solid var(--border-default)',
-        borderRadius: 8,
+        borderRadius: 14,
         overflow: 'hidden',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div
         style={{
-          padding: '14px 20px',
+          padding: '16px 20px',
           borderBottom: '1px solid var(--border-subtle)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
           flexWrap: 'wrap',
+          background: 'var(--globe-header-bg)',
+          backdropFilter: 'blur(16px)',
         }}
       >
         <div>
-          <p
-            style={{
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              color: 'var(--text-secondary)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            Global Threat Origins
+          <p style={{ fontSize: '0.88rem', fontWeight: 680, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Globe2 size={15} style={{ color: 'var(--primary)' }} />
+            Global threat origins
           </p>
           <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 3 }}>
             {loaded
@@ -226,7 +235,7 @@ export default function IpGlobe() {
               : 'Loading IP intelligence…'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '5px 9px', background: 'var(--globe-legend-bg)', border: '1px solid var(--border-default)', borderRadius: 999 }}>
           {LEGEND.map((item) => (
             <span
               key={item.label}
@@ -234,20 +243,19 @@ export default function IpGlobe() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 5,
-                fontSize: '0.66rem',
+                fontSize: '0.62rem',
                 fontWeight: 600,
                 color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                letterSpacing: '0.03em',
               }}
             >
               <span
                 style={{
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   borderRadius: '50%',
                   background: item.color,
-                  boxShadow: `0 0 6px ${withAlpha(item.color, 0.8)}`,
+                  boxShadow: `0 0 0 3px ${withAlpha(item.color, 0.12)}`,
                 }}
               />
               {item.label}
@@ -256,17 +264,27 @@ export default function IpGlobe() {
         </div>
       </div>
 
-      <div ref={wrapRef} style={{ position: 'relative', height: 500 }}>
-        {size.w > 0 && size.h > 0 && (
+      <div ref={wrapRef} className="globe-canvas-wrap" style={{ position: 'relative', height: webglAvailable ? 500 : 300 }}>
+        {!webglAvailable ? (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-muted)', padding: 24, textAlign: 'center' }}>
+            <Globe2 size={30} style={{ color: 'var(--text-faint)' }} />
+            <p style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-secondary)' }}>3D globe unavailable</p>
+            <p style={{ fontSize: '0.76rem' }}>WebGL is disabled in this browser. IP origin data is still available in the scan detail and trace views.</p>
+          </div>
+        ) : size.w > 0 && size.h > 0 && (
           <Globe
             ref={globeRef}
             width={size.w}
             height={size.h}
             backgroundColor="rgba(0,0,0,0)"
-            globeImageUrl="https://unpkg.com/three-globe/example/img/earth-night.jpg"
+            globeImageUrl={
+              isDark
+                ? 'https://unpkg.com/three-globe/example/img/earth-night.jpg'
+                : 'https://unpkg.com/three-globe/example/img/earth-day.jpg'
+            }
             bumpImageUrl="https://unpkg.com/three-globe/example/img/earth-topology.png"
-            atmosphereColor="#38bdf8"
-            atmosphereAltitude={0.16}
+            atmosphereColor={isDark ? '#60a5fa' : '#93c5fd'}
+            atmosphereAltitude={0.12}
             showGraticules={false}
             onGlobeReady={handleReady}
             pointsData={points}
@@ -274,28 +292,28 @@ export default function IpGlobe() {
             pointLng="lng"
             pointColor={(p) => pointColor(p as IpGeoPoint)}
             pointAltitude={0.018}
-            pointRadius={0.38}
+            pointRadius={0.34}
             pointResolution={16}
-            pointsTransitionDuration={1600}
+            pointsTransitionDuration={reduceMotion ? 0 : 1300}
             pointLabel={(p) => pointLabel(p as IpGeoPoint)}
             onPointHover={(p) => setHovered((p as IpGeoPoint | null) ?? null)}
             labelsData={labels}
             labelLat="lat"
             labelLng="lng"
             labelText="text"
-            labelSize={1.15}
-            labelDotRadius={0.4}
-            labelColor={() => '#e2e8f0'}
+            labelSize={1.05}
+            labelDotRadius={0.34}
+            labelColor={() => (isDark ? '#e8eef8' : '#0f172a')}
             labelResolution={2}
             labelAltitude={0.012}
-            labelsTransitionDuration={1400}
-            ringsData={points}
+            labelsTransitionDuration={reduceMotion ? 0 : 1100}
+            ringsData={reduceMotion ? [] : points}
             ringLat="lat"
             ringLng="lng"
             ringColor={(p: object) => (t: number) => withAlpha(pointColor(p as IpGeoPoint), 1 - t)}
             ringMaxRadius={4}
-            ringPropagationSpeed={2.5}
-            ringRepeatPeriod={2000}
+            ringPropagationSpeed={2.3}
+            ringRepeatPeriod={2200}
           />
         )}
 
@@ -307,11 +325,13 @@ export default function IpGlobe() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: 8,
               fontSize: '0.8rem',
               color: 'var(--text-muted)',
               pointerEvents: 'none',
             }}
           >
+            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
             Loading IP intelligence…
           </div>
         )}
@@ -327,6 +347,8 @@ export default function IpGlobe() {
               fontSize: '0.8rem',
               color: 'var(--text-muted)',
               pointerEvents: 'none',
+              textAlign: 'center',
+              padding: 24,
             }}
           >
             No geolocated IPs yet — run a scan with origin tracing to populate the globe.
