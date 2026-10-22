@@ -19,8 +19,10 @@ def _config(db_url: str) -> Config:
     return cfg
 
 
-def test_email_thread_migration_upgrade_and_downgrade(tmp_path):
+def test_email_thread_migration_upgrade_and_downgrade(tmp_path, monkeypatch):
     db_url = f"sqlite:///{tmp_path}/thread_migration.db"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+
     engine = create_engine(db_url)
     Base.metadata.create_all(engine)
     Email.__table__.drop(engine)
