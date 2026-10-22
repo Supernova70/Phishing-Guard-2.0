@@ -24,8 +24,18 @@ NC='\033[0m'
 
 cd "$(dirname "$0")"
 
-DUCKDNS_TOKEN="REDACTED_DUCKDNS_TOKEN"
 DUCKDNS_DOMAIN="phishing-guard"
+# Never commit the DuckDNS token. Read it from the environment, falling back
+# to the ignored .env.prod file used by docker compose.
+DUCKDNS_TOKEN="${DUCKDNS_TOKEN:-}"
+if [ -z "$DUCKDNS_TOKEN" ] && [ -f .env.prod ]; then
+    DUCKDNS_TOKEN=$(grep -E '^DUCKDNS_TOKEN=' .env.prod | tail -n 1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')
+fi
+if [ "${SKIP_DUCKDNS:-0}" != "1" ] && [ -z "$DUCKDNS_TOKEN" ]; then
+    echo -e "${RED}ERROR: DUCKDNS_TOKEN is not set.${NC}"
+    echo -e "${RED}Add DUCKDNS_TOKEN=... to .env.prod or export it, or run with SKIP_DUCKDNS=1.${NC}"
+    exit 1
+fi
 COMPOSE="docker compose -f docker-compose.prod.yml"
 CERT_DIR="/etc/letsencrypt/live/${DUCKDNS_DOMAIN}.duckdns.org"
 
