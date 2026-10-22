@@ -2,6 +2,7 @@
 
 export interface Email {
   id: number;
+  number?: number;
   message_id: string;
   sender: string;
   subject: string;
@@ -12,6 +13,9 @@ export interface Email {
   fetched_at: string;
   attachment_count: number;
   scan_count: number;
+  latest_scan_status?: ScanStatus | null;
+  latest_scan_classification?: Classification | null;
+  latest_scan_score?: number | null;
 }
 
 export interface EmailDetail extends Email {
@@ -37,6 +41,8 @@ export type Classification = 'safe' | 'suspicious' | 'dangerous';
 export interface Scan {
   id: number;
   email_id: number;
+  email_number?: number;
+  email_subject?: string | null;
   status: ScanStatus;
   started_at: string | null;
   completed_at: string | null;
@@ -52,6 +58,37 @@ export interface ScanTriggerResponse {
   scan_id: number;
   email_id: number;
   verdict: null;
+}
+
+export interface QrCodeInfo {
+  value: string;
+  format: string;
+  kind: 'qr' | 'barcode' | string;
+  container: string;
+  page?: number;
+  is_url: boolean;
+  url?: string;
+}
+
+export interface QrUrlAnalysis {
+  url: string;
+  final_url?: string | null;
+  score: number;
+  heuristic_score: number;
+  vt_malicious: number;
+  vt_total: number;
+  flags: string[];
+}
+
+export interface QrScanResult {
+  filename: string;
+  size_bytes: number;
+  code_count: number;
+  codes: QrCodeInfo[];
+  urls: string[];
+  url_analysis: QrUrlAnalysis[];
+  max_url_score: number;
+  note?: string | null;
 }
 
 export interface Verdict {
@@ -72,6 +109,16 @@ export interface ScanBreakdown {
     score: number;
     label: string;
     is_phishing: boolean;
+    bec?: {
+      score: number;
+      categories: Array<{ category: string; confidence: number; detail?: string }>;
+    } | null;
+    lookalike?: {
+      brand: string;
+      similarity: number;
+      registered_domain?: string;
+    } | null;
+    flags?: string[];
   };
   url: {
     score: number;
@@ -124,7 +171,25 @@ export interface ScanBreakdown {
         severity: string;
         tags: string[];
         description: string;
+        explanation?: string;
+        matched_strings?: string[];
+        evidence?: Array<{
+          string: string;
+          offset: number;
+          preview: string;
+          count: number;
+        }>;
       }>;
+      // Explainable score contributions: why this file scored what it scored
+      score_breakdown?: Array<{
+        signal: string;
+        points: number;
+        detail?: string;
+        evidence?: string[];
+      }>;
+      embedded_urls?: string[];
+      // Quishing: barcodes decoded from images/PDFs by the attachment engine
+      qr_codes?: QrCodeInfo[];
       // VirusTotal hash lookup results
       sha256?: string;
       vt_malicious?: number;
@@ -134,6 +199,27 @@ export interface ScanBreakdown {
       vt_error?: string | null;
     }>;
   };
+  qr?: {
+    present: boolean;
+    code_count: number;
+    url_count: number;
+    codes: QrCodeInfo[];
+    score: number;
+    high_risk_urls: string[];
+  };
+  header?: {
+    score: number;
+    present: boolean;
+    flags: string[];
+    // Fired anomaly rules with their score weights (plan §6.2, FE-C1)
+    rules: Array<{ rule: string; weight: number; detail: string }> | unknown[];
+    origin_ip: string | null;
+    origin_host: string | null;
+    hop_count: number;
+    auth: Record<string, unknown> | null;
+    errors: string[];
+  };
+  attribution?: Record<string, unknown> | null;
 }
 
 // ─── Health Types ────────────────────────────────────────────────────────────

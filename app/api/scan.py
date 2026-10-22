@@ -7,29 +7,67 @@ import io
 import logging
 import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import UTC, datetime
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session, selectinload
 
-from app.dependencies import SessionLocal, get_db
+from app.dependencies import SessionLocal, get_current_user, get_db, owned_or_404
+from app.api.email import email_numbers
+from app.engines.mitre import map_attack_techniques, summarize_tactics
 from app.models.email import Email
+from app.models.indicator import Indicator
 from app.models.scan import Scan, ScanStatus, Verdict
+from app.models.user import User
 from app.schemas.scan import ScanListResponse, ScanOut, ScanTriggerResponse
+from app.services.finding_service import load_findings
 from app.services.scan_service import ScanService
+from app.services.thread_service import load_thread
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
+SCAN_TIMEOUT_SECONDS = 240
+
+
+def _mark_scan_error(scan_id: int) -> None:
+    """Mark a scan as ERROR using a fresh short-lived session (timeout path —
+    the original session still belongs to the abandoned worker thread)."""
+    err_db = SessionLocal()
+    try:
+        scan = err_db.query(Scan).filter(Scan.id == scan_id).first()
+        if scan:
+            scan.status = ScanStatus.ERROR.value
+            scan.completed_at = datetime.now(UTC).replace(tzinfo=None)
+            err_db.commit()
+    except Exception:
+        err_db.rollback()
+        logger.exception("Failed to mark timed-out scan %s as error", scan_id)
+    finally:
+        err_db.close()
+
 
 def _run_scan_task(scan_id: int) -> None:
-    """Run a scan after the HTTP response using a task-owned DB session."""
+    """Run a scan after the HTTP response using a task-owned DB session.
+
+    Uses shutdown(wait=False) on timeout — a context-managed executor
+    would block forever in __exit__ waiting for the hung thread, so the
+    timeout handler never executed and the scan stayed RUNNING forever.
+    """
     db = SessionLocal()
+    executor = ThreadPoolExecutor(max_workers=1)
+    timed_out = False
     try:
-        ScanService(db).run_scan_by_id(scan_id)
+        future = executor.submit(ScanService(db).run_scan_by_id, scan_id)
+        future.result(timeout=SCAN_TIMEOUT_SECONDS)
+    except FuturesTimeoutError:
+        timed_out = True
+        logger.error("Scan %s timed out after %ds — marking as error", scan_id, SCAN_TIMEOUT_SECONDS)
+        _mark_scan_error(scan_id)
     except Exception:
         logger.exception("Background scan %s failed", scan_id)
         db.rollback()
@@ -39,12 +77,34 @@ def _run_scan_task(scan_id: int) -> None:
             scan.completed_at = datetime.now(UTC).replace(tzinfo=None)
             db.commit()
     finally:
-        db.close()
+        executor.shutdown(wait=False, cancel_futures=True)
+        if not timed_out:
+            db.close()   # on timeout the session belongs to the still-running thread
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixed-path routes (must come before parameterized routes)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/events")
+async def stream_global_events(user: User = Depends(get_current_user)):
+    """Account SSE feed: this account's terminal (complete/error) or
+    high-risk (score ≥ 70) scans.
+
+    Declared ahead of `/{scan_id}` so `/scans/events` is not shadowed.
+    """
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+    _global_subscribers.append((queue, user.id))
+    return StreamingResponse(
+        _global_event_generator(queue, user.id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
 
 @router.get("", response_model=ScanListResponse)
 async def list_scans(
@@ -55,9 +115,10 @@ async def list_scans(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """List all scans with pagination."""
-    query = db.query(Scan)
+    """List the signed-in account's scans with pagination."""
+    query = db.query(Scan).filter(Scan.user_id == user.id)
 
     if email_id is not None:
         query = query.filter(Scan.email_id == email_id)
@@ -72,10 +133,24 @@ async def list_scans(
             query = query.filter(Verdict.final_score <= score_max)
 
     total = query.count()
-    scans = query.order_by(Scan.id.desc()).offset(skip).limit(limit).all()
+    scans = (
+        query.options(selectinload(Scan.email))
+        .order_by(Scan.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    numbers = email_numbers(db, user.id)
     return ScanListResponse(
         total=total,
-        scans=[ScanOut(**s.to_dict()) for s in scans],
+        scans=[
+            ScanOut(
+                **s.to_dict(),
+                email_number=numbers.get(s.email_id),
+                email_subject=s.email.subject if s.email else None,
+            )
+            for s in scans
+        ],
     )
 
 
@@ -83,9 +158,13 @@ async def list_scans(
 async def export_scans_csv(
     classification: str = Query(None),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Export all scan results as a downloadable CSV file."""
-    query = db.query(Scan).filter(Scan.status == ScanStatus.COMPLETE.value)
+    """Export the signed-in account's completed scans as CSV."""
+    query = db.query(Scan).filter(
+        Scan.user_id == user.id,
+        Scan.status == ScanStatus.COMPLETE.value,
+    )
 
     if classification:
         query = query.join(Verdict).filter(Verdict.classification == classification)
@@ -104,7 +183,7 @@ async def export_scans_csv(
     for scan in scans:
         verdict = scan.verdict
         email = scan.email
-        bd = verdict.breakdown if verdict else {}
+        bd = (verdict.breakdown if verdict and verdict.breakdown else {}) or {}
         url_data = bd.get("url", {})
         att_data = bd.get("attachment", {})
 
@@ -135,9 +214,12 @@ async def export_scans_csv(
 
 
 @router.post("/auto-scan")
-async def trigger_auto_scan(background_tasks: BackgroundTasks):
+async def trigger_auto_scan(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
     """Manually trigger an auto-scan cycle (fetch + scan new emails)."""
-    background_tasks.add_task(_run_auto_scan)
+    background_tasks.add_task(_run_auto_scan, user.id)
     return {"status": "queued", "message": "Auto-scan started in background"}
 
 
@@ -151,22 +233,23 @@ async def trigger_auto_scan(background_tasks: BackgroundTasks):
     response_model=ScanTriggerResponse,
 )
 async def trigger_scan(
-    email_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    email_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
-    Trigger a full analysis scan on an email.
+    Trigger a full analysis scan on one of your emails.
 
     Creates a pending scan and returns immediately. The frontend polls
     GET /scans/{scan_id} until the scan is complete or errored.
     """
-    # Verify email exists
     email = db.query(Email).filter(Email.id == email_id).first()
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
+    owned_or_404(email, user)
 
-    # Create scan record
     scan = Scan(
         email_id=email_id,
+        user_id=user.id,
         status=ScanStatus.PENDING.value,
         started_at=None,
     )
@@ -184,12 +267,88 @@ async def trigger_scan(
 
 
 @router.get("/{scan_id}", response_model=ScanOut)
-async def get_scan(scan_id: int, db: Session = Depends(get_db)):
-    """Get scan details including verdict."""
+async def get_scan(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get scan details including verdict (own scans only)."""
     scan = db.query(Scan).filter(Scan.id == scan_id).first()
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
-    return ScanOut(**scan.to_dict())
+    owned_or_404(scan, user)
+    return ScanOut(
+        **scan.to_dict(),
+        email_number=email_numbers(db, scan.user_id).get(scan.email_id),
+        email_subject=scan.email.subject if scan.email else None,
+    )
+
+
+@router.get("/{scan_id}/findings")
+async def get_scan_findings(
+    scan_id: int,
+    category: str = Query(None, max_length=32),
+    min_severity: float = Query(0.0, ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Evidence-backed extended-analyzer findings for one scan.
+
+    The legacy verdict breakdown remains authoritative for the original
+    AI/URL/attachment/header scores.  These findings are additive and
+    include conversation, identity, kit and active-content analyzers.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    rows = load_findings(
+        db,
+        scan.id,
+        category=category,
+        min_severity=min_severity,
+    )
+    conversation = None
+    if scan.verdict and scan.verdict.breakdown:
+        conversation = scan.verdict.breakdown.get("conversation")
+    return {
+        "scan_id": scan.id,
+        "count": len(rows),
+        "findings": [row.to_dict() for row in rows],
+        "conversation": conversation,
+    }
+
+
+@router.get("/{scan_id}/thread")
+async def get_scan_thread(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Read the RFC thread around this scan's email (owner-scoped)."""
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    email = scan.email
+    if email is None:
+        raise HTTPException(status_code=404, detail="Email not found")
+    identity, messages = load_thread(db, email)
+    findings = load_findings(db, scan.id, category="thread")
+    return {
+        "scan_id": scan.id,
+        "thread_key": identity.thread_key,
+        "normalized_subject": identity.normalized_subject,
+        "count": len(messages),
+        "messages": [
+            {
+                "email_id": item.id,
+                "message_id": item.message_id,
+                "sender": item.sender,
+                "subject": item.subject,
+                "date": item.date,
+                "in_reply_to": item.in_reply_to,
+                "has_attachments": bool(item.has_attachments),
+                "is_current": item.id == email.id,
+            }
+            for item in messages
+        ],
+        "findings": [row.to_dict() for row in findings],
+    }
 
 
 # ── AI Threat Summary ──────────────────────────────────────
@@ -201,6 +360,8 @@ class ThreatSummaryResponse(BaseModel):
     summary: str
     key_findings: list[str]
     risk_factors: list[dict]
+    # Evidence-backed MITRE ATT&CK mapping (empty for SAFE verdicts).
+    techniques: list[dict] = Field(default_factory=list)
 
 
 def _generate_threat_summary(scan: Scan) -> dict:
@@ -211,6 +372,7 @@ def _generate_threat_summary(scan: Scan) -> dict:
             "summary": "No analysis results available.",
             "key_findings": [],
             "risk_factors": [],
+            "techniques": [],
         }
 
     bd = verdict.breakdown or {}
@@ -352,11 +514,20 @@ def _generate_threat_summary(scan: Scan) -> dict:
         "summary": " ".join(summary_parts),
         "key_findings": findings,
         "risk_factors": risk_factors,
+        "techniques": map_attack_techniques(
+            bd,
+            final_score=score,
+            classification=classification,
+        ),
     }
 
 
 @router.get("/{scan_id}/summary", response_model=ThreatSummaryResponse)
-async def get_threat_summary(scan_id: int, db: Session = Depends(get_db)):
+async def get_threat_summary(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """
     Generate an AI-powered natural language threat summary for a scan.
 
@@ -364,8 +535,7 @@ async def get_threat_summary(scan_id: int, db: Session = Depends(get_db)):
     a certain way, including key findings from each analysis engine.
     """
     scan = db.query(Scan).filter(Scan.id == scan_id).first()
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+    owned_or_404(scan, user)
 
     if scan.status != ScanStatus.COMPLETE.value:
         raise HTTPException(
@@ -386,7 +556,98 @@ async def get_threat_summary(scan_id: int, db: Session = Depends(get_db)):
         summary=result["summary"],
         key_findings=result["key_findings"],
         risk_factors=result["risk_factors"],
+        techniques=result["techniques"],
     )
+
+
+@router.get("/{scan_id}/mitre")
+async def get_scan_mitre(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Evidence-backed MITRE ATT&CK mapping for one completed scan.
+
+    Derived on read from the stored verdict breakdown, so historical scans
+    are mapped without re-scanning; SAFE verdicts return an empty list.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+
+    if scan.status != ScanStatus.COMPLETE.value:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scan is not complete (status: {scan.status})",
+        )
+
+    verdict = scan.verdict
+    if not verdict:
+        raise HTTPException(status_code=404, detail="No verdict available")
+
+    techniques = map_attack_techniques(
+        verdict.breakdown or {},
+        final_score=verdict.final_score,
+        classification=verdict.classification,
+    )
+    return {
+        "scan_id": scan.id,
+        "classification": verdict.classification,
+        "final_score": verdict.final_score,
+        "techniques": techniques,
+        "technique_count": len(techniques),
+        "tactics": summarize_tactics(techniques),
+    }
+
+
+@router.get("/{scan_id}/attribution")
+async def get_scan_attribution(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Attribution verdict + factors + IoCs for one scan (plan §5, B2).
+
+    The verdict's stored `breakdown.attribution` is authoritative (pure,
+    evidence-based); indicators ride along for one-shot rendering.
+    """
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    verdict = db.query(Verdict).filter(Verdict.scan_id == scan_id).first()
+    attribution = (verdict.breakdown or {}).get("attribution") if verdict else None
+    if not attribution:
+        raise HTTPException(
+            status_code=404,
+            detail="Attribution not available (scan has no verdict yet)",
+        )
+    indicators = (
+        db.query(Indicator)
+        .filter(Indicator.scan_id == scan_id)
+        .order_by(Indicator.type, Indicator.value)
+        .all()
+    )
+    return {
+        "scan_id": scan_id,
+        "attribution": attribution,
+        "indicators": [i.to_dict() for i in indicators],
+    }
+
+
+@router.get("/{scan_id}/indicators")
+async def get_scan_indicators(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """IoC list extracted from a single scan (plan §5, B3)."""
+    scan = db.query(Scan).filter(Scan.id == scan_id).first()
+    owned_or_404(scan, user)
+    rows = (
+        db.query(Indicator)
+        .filter(Indicator.scan_id == scan_id)
+        .order_by(Indicator.type, Indicator.value)
+        .all()
+    )
+    return {"count": len(rows), "indicators": [i.to_dict() for i in rows]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -395,15 +656,47 @@ async def get_threat_summary(scan_id: int, db: Session = Depends(get_db)):
 
 # In-memory subscriber registry: scan_id -> list of queues
 _scan_subscribers: dict[int, list[asyncio.Queue]] = defaultdict(list)
+# Account alert feed subscribers: (queue, user_id) for terminal / high-risk scans
+_global_subscribers: list[tuple[asyncio.Queue, int]] = []
+
+_GLOBAL_EVENT_TYPES = ("complete", "error")
 
 
-def publish_scan_event(scan_id: int, event: dict):
-    """Publish a scan event to all subscribers of that scan."""
-    queues = _scan_subscribers.get(scan_id, [])
+def publish_scan_event(scan_id: int, event: dict, user_id: int | None = None):
+    """Publish a scan event to that scan's subscribers and, when it is
+    terminal or high-risk, to that account's alert feed."""
+    queues = list(_scan_subscribers.get(scan_id, []))
+    is_terminal = event.get("type") in _GLOBAL_EVENT_TYPES
+    is_high_risk = float(event.get("final_score") or 0) >= 70
+    if is_terminal or is_high_risk and user_id is not None:
+        for q, uid in list(_global_subscribers):
+            if user_id is None or uid == user_id:
+                queues.append(q)
     for q in queues:
         try:
             q.put_nowait(event)
         except asyncio.QueueFull:
+            pass
+
+
+async def _global_event_generator(
+    queue: asyncio.Queue, user_id: int
+) -> AsyncGenerator[str, None]:
+    """Unbounded SSE stream for the account alert feed (no per-scan end)."""
+    try:
+        yield f"data: {json.dumps({'type': 'connected', 'scope': 'global'})}\n\n"
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                if event.get("user_id") is not None and event["user_id"] != user_id:
+                    continue
+                yield f"data: {json.dumps(event)}\n\n"
+            except asyncio.TimeoutError:
+                yield f": keepalive\n\n"
+    finally:
+        try:
+            _global_subscribers.remove((queue, user_id))
+        except ValueError:
             pass
 
 
@@ -431,11 +724,14 @@ async def _scan_event_generator(scan_id: int, queue: asyncio.Queue) -> AsyncGene
 
 
 @router.get("/{scan_id}/events")
-async def stream_scan_events(scan_id: int, db: Session = Depends(get_db)):
+async def stream_scan_events(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Subscribe to real-time scan progress via Server-Sent Events."""
     scan = db.query(Scan).filter(Scan.id == scan_id).first()
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+    owned_or_404(scan, user)
 
     if scan.status == ScanStatus.COMPLETE.value:
         verdict = scan.verdict
@@ -465,8 +761,8 @@ async def stream_scan_events(scan_id: int, db: Session = Depends(get_db)):
 _auto_scan_running = False
 
 
-def _run_auto_scan():
-    """Background task: fetch new emails and auto-scan them."""
+def _run_auto_scan(user_id: int):
+    """Background task: fetch this account's new emails and auto-scan them."""
     global _auto_scan_running
     if _auto_scan_running:
         return
@@ -475,7 +771,7 @@ def _run_auto_scan():
         db = SessionLocal()
         try:
             from app.services.email_service import EmailService
-            email_service = EmailService(db)
+            email_service = EmailService(db, user_id=user_id)
             new_count, total = email_service.fetch_and_store()
 
             if new_count > 0:
@@ -483,13 +779,14 @@ def _run_auto_scan():
                 unsanned = (
                     db.query(EmailModel)
                     .outerjoin(Scan)
-                    .filter(Scan.id.is_(None))
+                    .filter(EmailModel.user_id == user_id, Scan.id.is_(None))
                     .all()
                 )
                 for email in unsanned:
                     try:
                         scan = Scan(
                             email_id=email.id,
+                            user_id=user_id,
                             status=ScanStatus.PENDING.value,
                             started_at=None,
                         )

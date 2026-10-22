@@ -5,13 +5,17 @@ import io
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
+from app.config import get_settings
+from app.dependencies import get_current_user, get_db, owned_or_404
+from app.engines.analyzers.qr_analyzer import analyze_attachment_bytes, available as qr_available
+from app.engines.url_analyzer import UrlAnalyzer
 from app.models.email import Attachment, Email
+from app.models.user import User
 from app.models.scan import Scan, ScanStatus, Verdict
 
 logger = logging.getLogger(__name__)
@@ -47,6 +51,91 @@ class AttachmentDetail(BaseModel):
     scan_results: list[dict] = []
 
 
+class QrScanResponse(BaseModel):
+    filename: str
+    size_bytes: int
+    code_count: int
+    codes: list[dict] = []
+    urls: list[str] = []
+    url_analysis: list[dict] = []
+    max_url_score: float = 0.0
+    note: Optional[str] = None
+
+
+MAX_QR_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/qr-scan", response_model=QrScanResponse)
+async def scan_qr_upload(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Decode QR/barcodes from an uploaded image or PDF (quishing inspector).
+
+    URLs found in the symbol are scored by the URL engine (heuristics +
+    VirusTotal). Dynamic browser analysis is intentionally disabled for
+    uploads: the caller supplies arbitrary content, so the endpoint must
+    not navigate to it.
+    """
+    if not qr_available():
+        raise HTTPException(
+            status_code=503,
+            detail="QR decoder not available on this deployment",
+        )
+
+    data = await file.read(MAX_QR_UPLOAD_BYTES + 1)
+    if len(data) > MAX_QR_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the {MAX_QR_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+        )
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    summary = analyze_attachment_bytes(data, file.filename or "upload")
+    urls = summary["urls"]
+
+    analysis: list[dict] = []
+    max_score = 0.0
+    if urls:
+        settings = get_settings().model_copy(
+            update={"DYNAMIC_URL_ENABLED": False}
+        )
+        result = UrlAnalyzer(settings=settings).analyze(
+            "", "", extra_urls=urls
+        )
+        max_score = result.url_score
+        analysis = [
+            {
+                "url": ur.original_url,
+                "final_url": ur.final_url,
+                "score": ur.final_score,
+                "heuristic_score": ur.heuristic_score,
+                "vt_malicious": ur.vt_malicious,
+                "vt_total": ur.vt_total,
+                "flags": (ur.heuristic_flags or [])[:8],
+            }
+            for ur in result.per_url_results
+        ]
+
+    note = None
+    if summary["count"] == 0:
+        note = "No QR or barcode found in this file."
+    elif not urls:
+        note = "Symbol decoded, but its payload is not an http(s) URL."
+
+    return QrScanResponse(
+        filename=file.filename or "upload",
+        size_bytes=len(data),
+        code_count=summary["count"],
+        codes=summary["codes"],
+        urls=urls,
+        url_analysis=analysis,
+        max_url_score=max_score,
+        note=note,
+    )
+
+
 class AttachmentListResponse(BaseModel):
     total: int
     attachments: list[AttachmentSummary]
@@ -60,9 +149,14 @@ async def list_attachments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """List all attachments with their latest scan results."""
-    query = db.query(Attachment)
+    """List the signed-in account's attachments with latest scan results."""
+    query = (
+        db.query(Attachment)
+        .join(Email, Email.id == Attachment.email_id)
+        .filter(Email.user_id == user.id)
+    )
 
     if email_id is not None:
         query = query.filter(Attachment.email_id == email_id)
@@ -99,13 +193,17 @@ async def list_attachments(
 
 
 @router.get("/{attachment_id}", response_model=AttachmentDetail)
-async def get_attachment(attachment_id: int, db: Session = Depends(get_db)):
-    """Get full attachment details with all scan analysis results."""
+async def get_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get full attachment details with all scan analysis results (own only)."""
     att = db.query(Attachment).filter(Attachment.id == attachment_id).first()
-    if not att:
+    if att is None:
         raise HTTPException(status_code=404, detail="Attachment not found")
-
     email_obj = att.email
+    owned_or_404(email_obj, user)
 
     # Get all scans for this email with verdicts
     scans = (

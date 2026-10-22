@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Database, Server, RefreshCw, CheckCircle, AlertTriangle, AlertCircle, Globe2 } from 'lucide-react';
+import { Activity, Database, Server, RefreshCw, CheckCircle, AlertTriangle, AlertCircle, Globe2, Shield } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { useSystemHealth, type HealthResponse } from '../hooks/useSystemHealth';
+import { useSystemHealth } from '../hooks/useSystemHealth';
 
 interface HealthSnapshot {
   time: number;
@@ -92,13 +92,14 @@ export function HealthPage() {
   }, [refresh]);
 
   useEffect(() => {
-    if (health) {
+    if (!health) return;
+    queueMicrotask(() => {
       setLatency(health.response_time_ms);
       setLastUpdated(new Date());
       setHistory((prev) => [...prev.slice(-19), {
         time: Date.now(), latency: health.response_time_ms, status: true,
       }]);
-    }
+    });
   }, [health]);
 
   const handleRefresh = async () => {
@@ -111,6 +112,8 @@ export function HealthPage() {
   const dbStatus = health?.components?.database?.status;
   const mlStatus = health?.components?.ml_model?.status;
   const dynamicStatus = health?.components?.dynamic_url?.status;
+  const vtComponent = health?.components?.virustotal;
+  const vtRot = vtComponent?.rotation;
 
   // Determine failing components for degraded banner
   const failingComponents: string[] = [];
@@ -176,7 +179,7 @@ export function HealthPage() {
       </motion.div>
 
       {/* Service cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
         <ServiceCard
           name="API"
           icon={<Server size={16} />}
@@ -217,7 +220,75 @@ export function HealthPage() {
             mlStatus === 'loaded' ? 'healthy' : 'warning'
           }
         />
+        <ServiceCard
+          name="VirusTotal"
+          icon={<Shield size={16} />}
+          status={
+            !health ? 'UNKNOWN' :
+            !vtRot ? (vtComponent?.status === 'configured' ? 'CONFIGURED' : 'NOT SET') :
+            vtRot.invalid >= vtRot.key_count && vtRot.key_count > 0 ? 'KEYS DEAD' :
+            vtRot.available === 0 ? 'COOLDOWN' :
+            vtRot.cooling_down > 0 ? 'ROTATING' : 'ACTIVE'
+          }
+          detail={
+            vtRot
+              ? `${vtRot.available}/${vtRot.key_count} keys ready · ${vtRot.cooling_down} cooling · ${vtRot.invalid} invalid · ${vtRot.total_calls} calls`
+              : vtComponent?.detail ?? 'No data'
+          }
+          variant={
+            !health ? 'unknown' :
+            !vtRot ? (vtComponent?.status === 'configured' ? 'healthy' : 'warning') :
+            vtRot.invalid >= vtRot.key_count && vtRot.key_count > 0 ? 'error' :
+            vtRot.available === 0 ? 'warning' :
+            'healthy'
+          }
+        />
       </div>
+
+      {/* VirusTotal key pool — per-key rotation state */}
+      {vtRot?.keys && vtRot.keys.length > 0 && (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+            VirusTotal Key Pool ({vtRot.keys.length})
+          </p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+            Call counters are per backend worker (2 workers) — totals may alternate between refreshes. Key states converge within seconds.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+            {vtRot.keys.map((k) => {
+              const stateColor = k.state === 'ready' ? '#10B981' : k.state === 'cooldown' ? '#F59E0B' : '#EF4444';
+              const stateLabel = k.state === 'cooldown'
+                ? `cooldown ${Math.floor(k.cooldown_remaining / 60)}m ${k.cooldown_remaining % 60}s`
+                : k.state;
+              return (
+                <div
+                  key={k.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px', gap: 8,
+                  }}
+                >
+                  <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    #{k.id} {k.masked}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      {k.calls} calls
+                    </span>
+                    <span style={{
+                      fontSize: '0.66rem', fontWeight: 700, textTransform: 'uppercase' as const,
+                      color: stateColor, background: `${stateColor}1A`,
+                      border: `1px solid ${stateColor}40`, padding: '2px 7px', borderRadius: 4,
+                    }}>
+                      {stateLabel}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Sparkline History */}
       {history.length > 1 && (

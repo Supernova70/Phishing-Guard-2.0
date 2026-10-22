@@ -10,8 +10,14 @@ Bug fixes in this version:
   BUG 2 — use_uid=True on IMAPClient; all commands operate on stable UIDs
   BUG 3 — Incremental fetch via FetchState.last_uid (only new UIDs fetched)
   BUG 4 — Attachment filenames sanitized against path traversal
+
+SIH 26106 additions:
+  — Raw RFC822 bytes preserved (gzip) with SHA-256 for chain of custody
+  — Full header block persisted (headers_json) for header forensics
+  — Received-chain and auth results parsed at ingestion into evidence tables
 """
 
+import gzip
 import hashlib
 import logging
 import os
@@ -24,9 +30,19 @@ from email import policy
 from email.parser import BytesParser
 from sqlalchemy.orm import Session
 
+from app.auth.crypto import decrypt_secret_safe
 from app.config import get_settings
 from app.models.email import Email, Attachment
+from app.models.user import User
+from app.services.gmail_fetch import (
+    GmailAuthFailed,
+    GmailNotConnected,
+    fetch_recent_raw_messages,
+)
+from app.models.email_source import AuthResult, EmailSource, ReceivedHop
 from app.models.fetch_state import FetchState
+from app.engines.headers.auth_parser import compute_alignment, parse_auth_headers
+from app.engines.headers.received_parser import parse_received_chain
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -35,8 +51,9 @@ settings = get_settings()
 class EmailService:
     """Handles email fetching, parsing, and storage."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: Optional[int] = None):
         self.db = db
+        self.user_id = user_id  # row-level tenancy: rows inserted for this account
 
     # ── Public API ───────────────────────────────────────
 
@@ -50,14 +67,17 @@ class EmailService:
         Returns:
             (new_count, total_fetched)
         """
-        raw_emails, fetched_uids = self._fetch_from_imap(limit)
+        raw_emails, fetched_uids = self._fetch_recent_messages(limit)
         new_count = 0
 
         for email_data in raw_emails:
             # Skip duplicates (dedup on RFC 2822 Message-ID)
             existing = (
                 self.db.query(Email)
-                .filter(Email.message_id == email_data["message_id"])
+                .filter(
+                    Email.user_id == self.user_id,
+                    Email.message_id == email_data["message_id"],
+                )
                 .first()
             )
             if existing:
@@ -73,6 +93,113 @@ class EmailService:
 
         self.db.commit()
         return new_count, len(raw_emails)
+
+    def import_eml_files(self, directory: str) -> Dict[str, Any]:
+        """
+        Import local `.eml` files (demo corpus / offline ingestion).
+
+        Deduplicates on Message-ID; a failure on one file never aborts
+        the batch (each file is its own transaction).
+        """
+        from pathlib import Path
+
+        files = sorted(Path(directory).glob("*.eml"))
+        imported = skipped = 0
+        failures: List[Dict[str, str]] = []
+        for path in files:
+            try:
+                raw = path.read_bytes()
+                msg = BytesParser(policy=policy.default).parsebytes(raw)
+                data = self._parse_mime(msg, raw)
+                existing = (
+                    self.db.query(Email)
+                    .filter(
+                        Email.user_id == self.user_id,
+                        Email.message_id == data["message_id"],
+                    )
+                    .first()
+                )
+                if existing:
+                    skipped += 1
+                    continue
+                self._store_email(data)
+                self.db.commit()
+                imported += 1
+            except Exception as exc:
+                self.db.rollback()
+                failures.append({"file": path.name, "error": str(exc)})
+                logger.error(f"EML import failed for {path.name}: {exc}")
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "failed": failures,
+            "total": len(files),
+        }
+
+    # ── Mailbox selection (per-account tenancy) ───────────────────────
+
+    def _fetch_recent_messages(
+        self, limit: int
+    ) -> Tuple[List[Dict[str, Any]], List[int]]:
+        """Fetch recent mail for THIS account only.
+
+        Priority: the account's own Gmail (OAuth refresh token from
+        consent) → legacy IMAP only when the configured mailbox belongs
+        to this same account → otherwise refuse. Never read the shared
+        operator mailbox on behalf of a different account.
+        """
+        user = self.db.get(User, self.user_id) if self.user_id else None
+        if user is not None:
+            refresh = (
+                decrypt_secret_safe(user.gmail_refresh_token_enc)
+                if user.gmail_connected
+                else None
+            )
+            if refresh:
+                try:
+                    return self._fetch_from_gmail(refresh, limit), []
+                except GmailAuthFailed as exc:
+                    if not self._legacy_imap_allowed(user):
+                        raise
+                    logger.warning(
+                        "Gmail token rejected for user %s (%s) — "
+                        "falling back to operator IMAP mailbox",
+                        user.id,
+                        exc,
+                    )
+            elif not self._legacy_imap_allowed(user):
+                raise GmailNotConnected(
+                    "Gmail is not connected for this account — sign in "
+                    "again with Google to grant read-only mailbox access"
+                )
+        return self._fetch_from_imap(limit)
+
+    @staticmethod
+    def _legacy_imap_allowed(user: Optional[User]) -> bool:
+        """Legacy IMAP is valid only for the account that owns the
+        configured mailbox (operator/demo). Scripts (no user) pass."""
+        if user is None:
+            return True
+        configured = (settings.EMAIL_ADDRESS or "").strip().lower()
+        return bool(configured) and configured == (user.email or "").strip().lower()
+
+    def _fetch_from_gmail(self, refresh_token: str, limit: int) -> List[Dict[str, Any]]:
+        """Download this account's newest INBOX mail via the Gmail API."""
+        cfg = get_settings()
+        raw_list = fetch_recent_raw_messages(
+            refresh_token,
+            cfg.GOOGLE_CLIENT_ID,
+            cfg.GOOGLE_CLIENT_SECRET,
+            limit=limit,
+        )
+        parsed: List[Dict[str, Any]] = []
+        for raw in raw_list:
+            try:
+                msg = BytesParser(policy=policy.default).parsebytes(raw)
+                parsed.append(self._parse_mime(msg, raw))
+            except Exception as exc:  # one bad message never aborts the batch
+                logger.error("Failed to parse Gmail message: %s", exc)
+        return parsed
 
     # ── IMAP Fetching ────────────────────────────────────
 
@@ -112,10 +239,9 @@ class EmailService:
                 try:
                     # fetch() with a UID list; IMAPClient handles UID mode automatically
                     raw = client.fetch([uid], ["RFC822"])[uid]
-                    parsed = BytesParser(policy=policy.default).parsebytes(
-                        raw[b"RFC822"]
-                    )
-                    emails.append(self._parse_mime(parsed))
+                    raw_bytes = raw[b"RFC822"]
+                    parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+                    emails.append(self._parse_mime(parsed, raw_bytes))
                 except Exception as e:
                     logger.error(f"Failed to parse email UID {uid}: {e}")
 
@@ -129,7 +255,7 @@ class EmailService:
 
     # ── MIME Parsing ─────────────────────────────────────
 
-    def _parse_mime(self, msg) -> Dict[str, Any]:
+    def _parse_mime(self, msg, raw_bytes: Optional[bytes] = None) -> Dict[str, Any]:
         """Extract structured data from a parsed MIME message."""
         html_body = None
         text_body = None
@@ -175,25 +301,42 @@ class EmailService:
                 f"{sender}{subject}{date}".encode()
             ).hexdigest()[:64]
 
+        # Full header block: {lowercase-name: [values...]} (Received repeats)
+        headers_map: Dict[str, List[str]] = {}
+        for name, value in msg.items():
+            headers_map.setdefault(name.lower(), []).append(str(value))
+
         return {
             "message_id": raw_msg_id[:512],
             "sender": str(msg.get("From", "Unknown"))[:512],
             "subject": str(msg.get("Subject", "No Subject"))[:1024],
             "date": str(msg.get("Date", ""))[:256],
             "to_address": str(msg.get("To", ""))[:512],
+            # Extended convenience keys (plan §4 B8) — `headers` above
+            # remains the authoritative verbatim store.
+            "return_path": str(msg.get("Return-Path", ""))[:512],
+            "reply_to": str(msg.get("Reply-To", ""))[:512],
+            "cc": str(msg.get("Cc", ""))[:512],
+            "x_mailer": str(msg.get("X-Mailer", ""))[:256],
+            "received_raw": list(headers_map.get("received", [])),
             "body_html": html_body,
             "body_text": text_body,
             "has_html": html_body is not None,
             "attachments": attachments,
+            "headers": headers_map,
+            "raw_bytes": raw_bytes,
         }
 
     # ── Database Storage ─────────────────────────────────
 
     def _store_email(self, data: Dict[str, Any]) -> Optional[Email]:
-        """Store a parsed email and its attachments in the database."""
+        """Store a parsed email, its attachments, and its raw evidence."""
         attachments_data = data.pop("attachments", [])
+        headers_map: Dict[str, List[str]] = data.pop("headers", {}) or {}
+        raw_bytes: Optional[bytes] = data.pop("raw_bytes", None)
 
         email_obj = Email(
+            user_id=self.user_id,
             message_id=data["message_id"],
             sender=data["sender"],
             subject=data["subject"],
@@ -206,6 +349,9 @@ class EmailService:
         )
         self.db.add(email_obj)
         self.db.flush()  # Get the email ID
+
+        # ── SIH: preserve raw evidence + parsed header forensics ────
+        self._store_email_source(email_obj, raw_bytes, headers_map)
 
         # Save attachments
         storage_base = settings.ATTACHMENT_DIR
@@ -242,13 +388,106 @@ class EmailService:
 
         return email_obj
 
+    # ── Raw evidence & header forensics (SIH 26106) ──────────────────
+
+    def _store_email_source(
+        self,
+        email_obj: Email,
+        raw_bytes: Optional[bytes],
+        headers_map: Dict[str, List[str]],
+    ) -> None:
+        """
+        Persist the evidentiary copy of an email:
+          - gzipped RFC822 bytes on disk + SHA-256 (chain of custody)
+          - full header block as JSON
+          - parsed Received hops + auth results rows
+
+        Failures here must never abort ingestion — evidence collection is
+        best-effort and logged; the email itself is still stored.
+        """
+        try:
+            raw_path = None
+            raw_sha = None
+            size_bytes = 0
+
+            if settings.PRESERVE_RAW_EMAIL and raw_bytes:
+                base_dir = settings.raw_email_dir
+                os.makedirs(base_dir, exist_ok=True)
+                raw_path = os.path.join(base_dir, f"{email_obj.id}.eml.gz")
+                payload = gzip.compress(raw_bytes)
+                with open(raw_path, "wb") as fh:
+                    fh.write(payload)
+                raw_sha = hashlib.sha256(raw_bytes).hexdigest()
+                size_bytes = len(raw_bytes)
+
+            self.db.add(
+                EmailSource(
+                    email_id=email_obj.id,
+                    raw_path=raw_path,
+                    raw_sha256=raw_sha,
+                    size_bytes=size_bytes,
+                    headers_json=headers_map or None,
+                )
+            )
+
+            # Received chain — chronological order, hop 0 = earliest
+            received = headers_map.get("received", [])
+            for index, hop in enumerate(parse_received_chain(received)):
+                self.db.add(
+                    ReceivedHop(
+                        email_id=email_obj.id,
+                        hop_index=index,
+                        raw=hop.raw,
+                        from_host=hop.from_host,
+                        from_ip=hop.from_ip,
+                        helo=hop.helo,
+                        by_host=hop.by_host,
+                        via=hop.via,
+                        protocol=hop.protocol,
+                        timestamp_raw=hop.timestamp_raw,
+                        timestamp_utc=hop.timestamp_utc,
+                        ptr_host=hop.ptr_host if hasattr(hop, "ptr_host") else None,
+                        is_internal=hop.is_internal,
+                        parse_confidence=hop.parse_confidence,
+                    )
+                )
+
+            # SPF / DKIM / DMARC header evidence
+            auth = parse_auth_headers(headers_map)
+            from_value = (headers_map.get("from") or [""])[0]
+            compute_alignment(auth, from_value)
+            if auth.source != "none":
+                self.db.add(
+                    AuthResult(
+                        email_id=email_obj.id,
+                        spf_result=auth.spf_result,
+                        spf_domain=auth.spf_domain,
+                        dkim_result=auth.dkim_result,
+                        dkim_domain=auth.dkim_domain,
+                        dkim_selector=auth.dkim_selector,
+                        dmarc_result=auth.dmarc_result,
+                        dmarc_domain=auth.dmarc_domain,
+                        alignment=auth.alignment,
+                        source=auth.source,
+                        detail_json={"errors": auth.errors},
+                    )
+                )
+
+        except Exception as exc:
+            logger.error(
+                f"Failed to store raw evidence for email {email_obj.id}: {exc}"
+            )
+
     # ── FetchState helpers ────────────────────────────────
 
     def _load_last_uid(self, mailbox: str) -> int:
         """Return the last stored UID for the given mailbox, or 0 if none."""
         state = (
             self.db.query(FetchState)
-            .filter(FetchState.mailbox == mailbox)
+            .filter(
+                FetchState.user_id == self.user_id,
+                FetchState.mailbox == mailbox,
+            )
             .first()
         )
         return state.last_uid if state else 0
@@ -261,11 +500,14 @@ class EmailService:
         """
         state = (
             self.db.query(FetchState)
-            .filter(FetchState.mailbox == mailbox)
+            .filter(
+                FetchState.user_id == self.user_id,
+                FetchState.mailbox == mailbox,
+            )
             .first()
         )
         if state is None:
-            state = FetchState(mailbox=mailbox)
+            state = FetchState(user_id=self.user_id, mailbox=mailbox)
             self.db.add(state)
 
         state.last_uid = max_uid

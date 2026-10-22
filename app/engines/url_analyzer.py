@@ -9,12 +9,30 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
-import httpx
+# Known legitimate CDNs/services that contain brand names as substrings.
+# Shared with the IoC exporter so shared infrastructure is never exported as
+# attacker infrastructure.
+LEGITIMATE_SERVICE_DOMAINS = frozenset({
+    "amazonaws.com", "googleapis.com", "google.com", "cloudfront.net",
+    "akamai.net", "akamaized.net", "fastly.net", "fastly.com",
+    "cloudflare.com", "azure.com", "azurewebsites.net",
+    "github.io", "github.com", "gitlab.io",
+    "s3.amazonaws.com", "console.aws.amazon.com",
+    # Google ccSLDs + shortlinks (google.co.in is Google, not a spoof)
+    "google.co.in", "google.co.uk", "google.com.au",
+    "google.co.jp", "google.de", "google.fr", "c.gle",
+    "goo.gl", "g.co",
+    # Legitimate email click-trackers (marketing redirectors)
+    "awstrack.me", "inflection.io", "pinterest.com",
+    "mailchi.mp", "substack.com",
+})
+
 from bs4 import BeautifulSoup
 
 from app.config import Settings, get_settings
 from app.engines.dynamic.dynamic_url_analyzer import DynamicUrlAnalyzer
 from app.engines.dynamic.scoring import registrable_domain
+from app.integrations.virustotal import VirusTotalClient
 
 # Redis caching removed — planned for Semester 2
 
@@ -70,8 +88,10 @@ class UrlAnalyzer:
     ):
         self._settings = settings or get_settings()
         self._vt_keys = self._settings.vt_api_keys
-        self._vt_key_index = 0
         self._vt_disabled_reason: str | None = None
+        # Multi-key rotating client — cooldown state is shared process-wide
+        # with the attachment engine (see app/integrations/virustotal.py).
+        self._vt = VirusTotalClient(keys=self._vt_keys)
         self._dynamic_analyzer = dynamic_analyzer
 
     def analyze(
@@ -80,14 +100,45 @@ class UrlAnalyzer:
         body_html: Optional[str],
         *,
         scan_id: int | None = None,
+        sender_domain: str | None = None,
+        sender_authenticated: bool = False,
+        extra_urls: Optional[List[str]] = None,
     ) -> UrlEngineResult:
         urls = self._extract_and_deduplicate(body_text or "", body_html or "")
+
+        # Additional URLs that did not come from the body: QR codes hidden in
+        # attachments (quishing), decoded barcodes, etc. Deduplicate against
+        # body URLs so the same link is never scored twice.
+        if extra_urls:
+            seen = {normalized for _, normalized in urls}
+            for raw in extra_urls:
+                raw = (raw or "").strip()
+                if not raw.lower().startswith("http"):
+                    continue
+                normalized = self._normalize(raw)
+                if not normalized or self._is_local_ip(normalized):
+                    continue
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                urls.append((raw, normalized))
+            urls.sort(key=lambda item: item[1])
+
+        sender_reg = None
+        if sender_domain:
+            sender_reg = registrable_domain(f"https://{sender_domain}") or (
+                sender_domain.lower().split(":")[0]
+            )
 
         results = []
         vt_checked = 0
 
         for original, normalized in urls:
-            result = self._score_heuristic(original, normalized)
+            result = self._score_heuristic(
+                original, normalized,
+                sender_reg=sender_reg,
+                sender_authenticated=sender_authenticated,
+            )
 
             # VirusTotal lookup
             if self._vt_keys:
@@ -261,7 +312,9 @@ class UrlAnalyzer:
     # ── STAGE 2: Static Heuristic Scoring ─────────────────────────────────――
 
     def _score_heuristic(
-        self, original_url: str, normalized_url: str
+        self, original_url: str, normalized_url: str,
+        sender_reg: Optional[str] = None,
+        sender_authenticated: bool = False,
     ) -> UrlAnalysisResult:
         res = UrlAnalysisResult(
             original_url=original_url, normalized_url=normalized_url
@@ -282,23 +335,19 @@ class UrlAnalyzer:
         is_institutional = any(registered_domain.endswith(tld) for tld in institutional_tlds)
 
         # Known legitimate CDNs/services that contain brand names as substrings
-        brand_whitelist_domains = {
-            "amazonaws.com", "googleapis.com", "google.com", "cloudfront.net",
-            "akamai.net", "akamaized.net", "fastly.net", "fastly.com",
-            "cloudflare.com", "azure.com", "azurewebsites.net",
-            "github.io", "github.com", "gitlab.io",
-            "s3.amazonaws.com", "console.aws.amazon.com",
-        }
         is_known_service = any(
             registered_domain == d or registered_domain.endswith(f".{d}")
-            for d in brand_whitelist_domains
+            for d in LEGITIMATE_SERVICE_DOMAINS
         )
 
-        # Check 1: HTTP scheme (+15, reduced for institutional)
+        # Check 1: HTTP scheme (+15, reduced for institutional / known services)
         if parsed.scheme == "http":
             if is_institutional:
                 score += 3  # Much lower penalty for .edu/.gov HTTP
                 res.heuristic_flags.append("HTTP connection (institutional domain — low risk)")
+            elif is_known_service:
+                score += 5  # Big brand over http: legacy link, will redirect
+                res.heuristic_flags.append("HTTP connection (known service — low risk)")
             else:
                 score += 15
                 res.heuristic_flags.append("Unencrypted HTTP connection")
@@ -342,26 +391,42 @@ class UrlAnalyzer:
                 (r"\bch[a4]se\b", "chase.com"),
                 (r"\bwe[l1]{2}sfarg[o0]\b", "wellsfargo.com"),
             ]
+            reg_label0 = registered_domain.split(".")[0]
             for pattern, real_domain in brands:
-                if re.search(pattern, hostname) and registered_domain != real_domain:
-                    match_str = re.search(pattern, hostname).group(0)
+                match = re.search(pattern, hostname)
+                if match and registered_domain != real_domain:
+                    brand = real_domain.split(".")[0]
+                    if reg_label0 == brand:
+                        # Brand-family domain: google.co.in, amazon.co.uk …
+                        # (first registrable label IS the brand — not a spoof)
+                        continue
                     score += 40
                     res.heuristic_flags.append(
-                        f"Brand impersonation: '{match_str}' in host but domain is '{registered_domain}'"
+                        f"Brand impersonation: '{match.group(0)}' in host but domain is '{registered_domain}'"
                     )
                     break
 
-        # Check 6: Excessive subdomains (+15, raised threshold for institutional)
+        # Check 6: Excessive subdomains (+15) — labels beyond the
+        # registrable domain (so www.google.co.in / console.aws.amazon.com,
+        # whose extra labels belong to the domain structure itself, don't count)
+        sub_count = len(parts) - len(registered_domain.split("."))
         subdomain_threshold = 5 if is_institutional else 4
-        if len(parts) >= subdomain_threshold:
+        if sub_count >= subdomain_threshold:
             score += 15
             res.heuristic_flags.append(
-                f"Excessive subdomains ({len(parts)} levels): {hostname}"
+                f"Excessive subdomains ({sub_count} levels): {hostname}"
             )
+
+        # Envelope-authenticated mail linking to its own domain: length
+        # and embedded-redirect heuristics are tracking/boilerplate
+        # patterns (JWT click codes, ESP click-wrap), not URL risk.
+        tracking_boilerplate = (
+            sender_authenticated and sender_reg and registered_domain == sender_reg
+        )
 
         # Check 7: Long URL (+10, raised threshold for known services)
         long_url_threshold = 400 if is_known_service else 200
-        if len(original_url) > long_url_threshold:
+        if len(original_url) > long_url_threshold and not tracking_boilerplate:
             score += 10
             res.heuristic_flags.append(
                 f"Unusually long URL ({len(original_url)} chars)"
@@ -374,7 +439,9 @@ class UrlAnalyzer:
             entropy = -sum(
                 (c / len(path)) * math.log2(c / len(path)) for c in counts.values()
             )
-            entropy_threshold = 5.5 if is_known_service else 5.0
+            entropy_threshold = 6.0 if is_known_service else 5.0
+            if is_institutional and not is_known_service:
+                entropy_threshold = 5.5
             if entropy > entropy_threshold:
                 score += 15
                 res.heuristic_flags.append(
@@ -388,10 +455,20 @@ class UrlAnalyzer:
                 "@ symbol in URL — credential obfuscation pattern"
             )
 
-        # Check 10: Redirect encoded (+20)
-        if original_url.lower().count("http") > 1:
-            score += 20
+        # Check 10: Redirect encoded (+20; +10 on known services — Google
+        # News / Pinterest click-wrap links embed their target routinely)
+        if original_url.lower().count("http") > 1 and not tracking_boilerplate:
+            score += 10 if is_known_service else 20
             res.heuristic_flags.append("URL contains embedded redirect")
+
+        # Check 11: Same domain as the sender — mailing-list / tracking
+        # boilerplate from the sender's own domain is not URL risk.
+        if sender_reg and registered_domain == sender_reg:
+            if score > 10.0:
+                score = 10.0
+                res.heuristic_flags.append(
+                    f"Same domain as sender ({sender_reg}) — tracking link, capped"
+                )
 
         res.heuristic_score = min(score, 100.0)
         return res
@@ -401,6 +478,12 @@ class UrlAnalyzer:
     # Caching will be re-added in Semester 2 with Redis.
 
     def _check_virustotal(self, result: UrlAnalysisResult) -> bool:
+        """
+        VirusTotal URL lookup with multi-key rotation.
+
+        Returns True when an HTTP attempt was made (counts toward
+        vt_checked_urls), False when the lookup was skipped.
+        """
         if self._vt_disabled_reason:
             result.vt_error = self._vt_disabled_reason
             return False
@@ -418,59 +501,50 @@ class UrlAnalyzer:
             .rstrip("=")
         )
 
-        api_key = self._vt_keys[self._vt_key_index]
-        self._vt_key_index = (self._vt_key_index + 1) % len(self._vt_keys)
-
-        headers = {"x-apikey": api_key}
-
         # Log that we are actually calling VT
         logger.info(f"VT lookup for URL: {result.normalized_url[:80]}")
 
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.get(
-                    f"https://www.virustotal.com/api/v3/urls/{url_id}", headers=headers
-                )
+        status, data, err = self._vt.get(f"/urls/{url_id}")
 
-                if resp.status_code == 200:
-                    data = resp.json()["data"]["attributes"]["last_analysis_stats"]
-                    self._apply_vt_stats(result, data)
-                    logger.info(
-                        f"VT result: malicious={result.vt_malicious} "
-                        f"suspicious={result.vt_suspicious} total={result.vt_total}"
-                    )
-                elif resp.status_code in (401, 403):
-                    self._vt_disabled_reason = (
-                        "VT authentication failed — check VIRUSTOTAL_API_KEYS"
-                    )
-                    result.vt_error = self._vt_disabled_reason
-                    logger.error(self._vt_disabled_reason)
+        if status == 200:
+            stats = (data or {}).get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+            self._apply_vt_stats(result, stats)
+            logger.info(
+                f"VT result: malicious={result.vt_malicious} "
+                f"suspicious={result.vt_suspicious} total={result.vt_total}"
+            )
 
-                elif resp.status_code == 404:
-                    result.vt_error = "Submitted to VT — not yet analyzed"
-                    # Submit for analysis
-                    client.post(
-                        "https://www.virustotal.com/api/v3/urls",
-                        data={"url": result.normalized_url},
-                        headers=headers,
-                    )
-                elif resp.status_code == 429:
-                    result.vt_error = "VT rate limit — heuristic score only"
-                    logger.warning(
-                        f"VT rate limit hit for URL: {result.normalized_url[:60]}"
-                    )
-                else:
-                    logger.warning(
-                        f"VT Error {resp.status_code} for {result.normalized_url}"
-                    )
-                    result.vt_error = f"VT HTTP Error {resp.status_code}"
+        elif status == 401:
+            # Every configured key was rejected — stop trying this scan.
+            self._vt_disabled_reason = err or (
+                "VT authentication failed — check VIRUSTOTAL_API_KEYS"
+            )
+            result.vt_error = self._vt_disabled_reason
+            logger.error(self._vt_disabled_reason)
 
-            return True
+        elif status == 404:
+            result.vt_error = "Submitted to VT — not yet analyzed"
+            # Submit for analysis (best effort — result available later)
+            self._vt.post("/urls", data={"url": result.normalized_url})
 
-        except Exception as e:
-            logger.warning(f"VT request failed: {e}")
-            result.vt_error = "VT connection failed"
-            return True
+        elif status == 429:
+            # All keys exhausted or cooling down — rotation client says why.
+            result.vt_error = err or "VT rate limit — heuristic score only"
+            logger.warning(
+                f"VT rate limit hit for URL: {result.normalized_url[:60]}"
+            )
+
+        elif status == 0:
+            result.vt_error = err or "VT connection failed"
+            logger.warning(f"VT request failed: {result.vt_error}")
+
+        else:
+            logger.warning(
+                f"VT Error {status} for {result.normalized_url}"
+            )
+            result.vt_error = err or f"VT HTTP Error {status}"
+
+        return True
 
     def _apply_vt_stats(self, result: UrlAnalysisResult, stats: dict) -> None:
         result.vt_malicious = stats.get("malicious", 0)

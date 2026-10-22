@@ -33,6 +33,7 @@ rule PhishingCredentialHarvest : phishing credentials
         description = "Detects credential-harvesting form patterns typical of phishing pages"
         author      = "Phishing Guard"
         severity    = "high"
+        applies_to  = "text,html,office,other"
         reference   = "Common phishing kit analysis"
 
     strings:
@@ -62,6 +63,7 @@ rule PhishingUrgencyLanguage : phishing social_engineering
         description = "Detects extreme urgency language used in phishing emails/pages"
         author      = "Phishing Guard"
         severity    = "medium"
+        applies_to  = "text,html,office,other"
 
     strings:
         $u1 = "your account has been suspended"  nocase ascii wide
@@ -82,9 +84,13 @@ rule PhishingUrgencyLanguage : phishing social_engineering
 rule PhishingBrandImpersonation : phishing impersonation
 {
     meta:
-        description = "Detects common brand impersonation strings in non-brand domains"
+        description = "Brand-name + credential language in a document (weak signal alone)"
         author      = "Phishing Guard"
-        severity    = "medium"
+        // low: brand words appear in perfectly legitimate documents
+        // (guidelines, tutorials, invoices). Keeps the signal visible
+        // without dominating a benign file's score.
+        severity    = "low"
+        applies_to  = "text,html,office,other"
 
     strings:
         // Brands commonly impersonated in phishing
@@ -116,6 +122,7 @@ rule PhishingFakeInvoiceAttachment : phishing invoice
         description = "Detects fake invoice/payment document lure patterns"
         author      = "Phishing Guard"
         severity    = "medium"
+        applies_to  = "text,html,office,other"
 
     strings:
         $i1 = "invoice"         nocase ascii wide

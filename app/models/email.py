@@ -3,7 +3,16 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, DateTime
+from sqlalchemy import (
+    String,
+    Text,
+    Boolean,
+    Integer,
+    ForeignKey,
+    DateTime,
+    JSON,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -13,13 +22,36 @@ class Email(Base):
     """Represents a fetched email from the user's inbox."""
 
     __tablename__ = "emails"
+    __table_args__ = (
+        # Same RFC message may exist for several accounts (shared demo
+        # mailbox) — uniqueness is scoped to the owner, not global.
+        UniqueConstraint("user_id", "message_id", name="uq_emails_user_message"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    message_id: Mapped[str] = mapped_column(String(512), unique=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
+    message_id: Mapped[str] = mapped_column(String(512), index=True)
     sender: Mapped[str] = mapped_column(String(512), index=True)
     subject: Mapped[str] = mapped_column(String(1024), index=True)
     date: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     to_address: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+
+    # ── RFC 5322 conversation identity (Phase 1) ─────────
+    # Derived from Message-ID / In-Reply-To / References.  The subject
+    # fallback keeps legacy mail (fetched before these columns existed)
+    # threadable without re-ingesting the mailbox.
+    thread_key: Mapped[Optional[str]] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    in_reply_to: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, index=True
+    )
+    references_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    normalized_subject: Mapped[Optional[str]] = mapped_column(
+        String(512), nullable=True, index=True
+    )
 
     body_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -37,13 +69,27 @@ class Email(Base):
     scans: Mapped[List["Scan"]] = relationship(  # type: ignore[name-defined]
         back_populates="email"
     )
+    source: Mapped[Optional["EmailSource"]] = relationship(  # type: ignore[name-defined]
+        back_populates="email", uselist=False, cascade="all, delete-orphan"
+    )
+    hops: Mapped[List["ReceivedHop"]] = relationship(  # type: ignore[name-defined]
+        back_populates="email", cascade="all, delete-orphan",
+        order_by="ReceivedHop.hop_index",
+    )
+    auth_result: Mapped[Optional["AuthResult"]] = relationship(  # type: ignore[name-defined]
+        back_populates="email", uselist=False, cascade="all, delete-orphan"
+    )
 
     def to_dict(self) -> dict:
+        latest_scan = max(self.scans, key=lambda s: s.id, default=None)
+        latest_verdict = latest_scan.verdict if latest_scan else None
         return {
             "id": self.id,
             "message_id": self.message_id,
             "sender": self.sender,
             "subject": self.subject,
+            "thread_key": self.thread_key,
+            "normalized_subject": self.normalized_subject,
             "date": self.date,
             "to_address": self.to_address,
             "has_html": self.has_html,
@@ -51,6 +97,11 @@ class Email(Base):
             "fetched_at": self.fetched_at.isoformat() if self.fetched_at else None,
             "attachment_count": len(self.attachments),
             "scan_count": len(self.scans),
+            "latest_scan_status": latest_scan.status if latest_scan else None,
+            "latest_scan_classification": (
+                latest_verdict.classification if latest_verdict else None
+            ),
+            "latest_scan_score": latest_verdict.final_score if latest_verdict else None,
         }
 
 

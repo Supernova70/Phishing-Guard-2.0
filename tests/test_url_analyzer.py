@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.config import Settings
 from app.engines.dynamic.models import BrowserObservation, DynamicUrlResult
 from app.engines.url_analyzer import UrlAnalyzer
+from app.integrations.virustotal import reset_vt_state
 
 
 def settings(**overrides) -> Settings:
@@ -37,8 +38,44 @@ class TestUrlAnalyzer:
             for flag in result.per_url_results[0].heuristic_flags
         )
 
-    @patch("app.engines.url_analyzer.httpx.Client")
+    def test_tracking_boilerplate_skipped_for_authenticated_sender(self):
+        """Long / redirect-encoded links on the sender's own domain are
+        click-tracking when the envelope is authenticated — not risk."""
+        long_link = "https://community.raklet.com/t/c?code=" + "a" * 400
+        analyzer = UrlAnalyzer(settings())
+
+        unauth = analyzer.analyze(
+            long_link, "", sender_domain="news@raklet.com"
+        )
+        assert any(
+            "long URL" in flag
+            for flag in unauth.per_url_results[0].heuristic_flags
+        )
+
+        auth = analyzer.analyze(
+            long_link, "",
+            sender_domain="news@raklet.com",
+            sender_authenticated=True,
+        )
+        assert auth.per_url_results[0].heuristic_flags == []
+        assert auth.per_url_results[0].final_score == 0.0
+
+    def test_authenticated_sender_other_domain_still_flagged(self):
+        """Authentication of the sender does not excuse a long link on a
+        different domain (ESP click-wrap stays visible via whitelist logic,
+        unknown redirectors keep the +20 embedded-redirect penalty)."""
+        analyzer = UrlAnalyzer(settings())
+        result = analyzer.analyze(
+            "https://evil.example/x?u=http%3A%2F%2Fpaypa1.com%2Flogin",
+            "",
+            sender_domain="news@raklet.com",
+            sender_authenticated=True,
+        )
+        assert result.per_url_results[0].final_score > 0.0
+
+    @patch("app.integrations.virustotal.httpx.Client")
     def test_vt_responses(self, mock_client):
+        reset_vt_state()
         analyzer = UrlAnalyzer(settings(VIRUSTOTAL_API_KEYS="mock"))
 
         response_ok = MagicMock()
@@ -54,13 +91,15 @@ class TestUrlAnalyzer:
                 }
             }
         }
-        mock_client.return_value.__enter__.return_value.get.side_effect = [response_ok]
+        mock_client.return_value.__enter__.return_value.request.side_effect = [response_ok]
         result = analyzer.analyze("http://evil.example", "")
         assert result.per_url_results[0].vt_malicious == 5
 
+        reset_vt_state()
         response_limited = MagicMock()
         response_limited.status_code = 429
-        mock_client.return_value.__enter__.return_value.get.side_effect = [
+        response_limited.headers = {}
+        mock_client.return_value.__enter__.return_value.request.side_effect = [
             response_limited
         ]
         result = analyzer.analyze("http://busy.example", "")
@@ -139,17 +178,18 @@ class TestUrlAnalyzer:
             "skipped:duplicate_domain",
         ]
 
-    @patch("app.engines.url_analyzer.httpx.Client")
+    @patch("app.integrations.virustotal.httpx.Client")
     def test_vt_auth_failure_stops_more_requests_in_same_scan(self, mock_client):
+        reset_vt_state()
         unauthorized = MagicMock(status_code=401)
-        mock_client.return_value.__enter__.return_value.get.return_value = unauthorized
+        mock_client.return_value.__enter__.return_value.request.return_value = unauthorized
         analyzer = UrlAnalyzer(settings(VIRUSTOTAL_API_KEYS="bad-key"))
 
         result = analyzer.analyze(
             "https://one.example https://two.example.net", ""
         )
 
-        assert mock_client.return_value.__enter__.return_value.get.call_count == 1
+        assert mock_client.return_value.__enter__.return_value.request.call_count == 1
         assert result.vt_checked_urls == 1
         assert all(
             item.vt_error == "VT authentication failed — check VIRUSTOTAL_API_KEYS"

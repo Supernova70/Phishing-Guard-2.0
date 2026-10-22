@@ -1,10 +1,29 @@
 # Phishing Guard V2 — Implementation Status & Roadmap
 
 > **Purpose**: Single source of truth for *what is done*, *what is left*, and *exactly how we will build the rest*. This is a college major project, so the design prioritises **robustness** (isolation, timeouts, idempotency, auditability) over fancy features.
-> **Last updated**: 2026-07-10
+> **Last updated**: 2026-10-21
 > **Owner**: Project team
 
 ---
+
+## 0. October 2026 — Judges' Review Additions
+
+These capabilities were added on top of the original roadmap and are live in
+production (`https://phishing-guard.duckdns.org`). All are covered by the
+offline test suite (635 tests at the time of writing).
+
+| Capability | What it does | Where |
+|---|---|---|
+| **MITRE ATT&CK mapping** | Derives techniques/tactics from the stored verdict `breakdown` (retroactive, no re-scan): credential-harvest BEC, spoofed identity, lookalike domains, high-risk URLs, malicious attachments. Campaign-level technique aggregation. | `app/engines/mitre.py`, `GET /scans/{id}/mitre`, `GET /scans/{id}/summary`, UI panel on Scan Detail + campaign chips |
+| **STIX 2.1 / CSV IoC export** | Exports observables from **confirmed dangerous** scans only: sender/reply-to/URL domains, origin IPs, attachment hashes. Shared infrastructure (Google, GitHub, CDNs, click-trackers) and brand-owned domains are skip-listed; URL domains require the engine's ≥60 high-risk line. | `app/engines/ioc_export.py`, `GET /export/stix`, `GET /export/csv`, Graph + Campaign export buttons |
+| **Evidence & Audit** | Custody table with per-row hash verification, whole-chain integrity, retained-raw download (audited), filterable access log. Appends are serialised with a Postgres advisory transaction lock; `scripts/repair_evidence_chain.py` re-anchors historical forks after verifying content hashes and aborts on tampering. | `frontend/src/pages/CompliancePage.tsx` (`/compliance`), `app/services/evidence_service.py`, audit actions `raw_view` / `evidence_verify` / `report_export` / `evidence_rechain` |
+| **Quishing (QR) detection** | Decodes QR/barcodes from images (PNG/JPEG/GIF/BMP/TIFF/WebP) and rasterised PDF pages (≤5 pages, ≤25 symbols, 40 MP guard). Decoded URLs are deduplicated against body links and scored by the URL engine (heuristics, VT, lookalike); symbols are preserved for forensics. QR presence alone adds no attachment score. | `app/engines/analyzers/qr_analyzer.py`, `app/services/scan_service.py` (`breakdown.qr`), `POST /attachments/qr-scan`, Attachments inspector + Scan Detail panel |
+| **Analyst feedback loop** | One ground-truth label per scan/user (`phishing` / `legitimate` / `unsure`) with the model prediction snapshotted. Metrics at the threat boundary (suspicious+dangerous): confusion matrix, accuracy, precision, recall, F1, per-class confirmed/disputed counts. | `app/models/feedback.py`, migration `0013_verdict_feedback.py`, `POST/GET /scans/{id}/feedback`, `GET /intel/model-performance`, feedback card on Scan Detail + dashboard model-health card |
+| **Global search** | Header palette (Cmd/Ctrl+K) searches email subject/sender, completed scans (newest scan per email, exact id lookup when numeric) and IOC values. Results are grouped, owner-scoped and navigate directly to the matching scan or inbox. | `app/api/search.py`, `GET /search`, `frontend/src/components/layout/Header.tsx` |
+| **Live alert push** | Server-Sent Events stream sends the unread count on connect, then one named `alert` event per new high-risk/spoof/BEC scan. The bell prepends the alert and increments its badge without a reload; a 30-second poll stays as a fallback. Cursor = connect-time max alert id, so reconnects never replay old notifications. | `app/api/alerts.py` (`GET /alerts/stream`), `frontend/src/components/layout/AlertBell.tsx` |
+
+All P2 backlog items are now delivered.
+
 
 ## Table of Contents
 
@@ -142,7 +161,7 @@ Ordered by **value/effort ratio** for a college major project.
 | # | Gap | Engine | Effort | Why it matters |
 |---|-----|--------|--------|----------------|
 | G1 | VT response caching (Redis) | URL + Attachment | Low | Frees VT quota (free tier = 4 req/min); fixes biggest production blocker |
-| G2 | Flip `ENABLE_VT_HASH_LOOKUP=True` + rotation/hardening | Attachment | Low | Code already written; just disabled for safety. Unlocks file reputation |
+| G2 | ~~Flip `ENABLE_VT_HASH_LOOKUP=True` + rotation/hardening~~ ✅ done 2026-10-01 | Attachment | Low | Multi-key rotation client (`app/integrations/virustotal.py`) + live enable. Unlocks file reputation |
 | G3 | Async scan worker (Celery + Redis) | Pipeline | Medium | Playwright + Sysmon are slow; BackgroundTask blocks the worker. Needed before G4/G5 |
 | G4 | **Dynamic URL analysis (Playwright)** | URL | Medium | Catches JS-rendered phishing forms, redirect chains, expired SSL — static heuristics miss these |
 | G5 | **Dynamic attachment analysis (Sysmon sandbox)** | Attachment | High | Signature of this project. Catches zero-day / behaviour-based malware that static + YARA miss |
@@ -185,9 +204,14 @@ Key format: `vt:{kind}:{sha256|url_hash}`. `kind ∈ {"url","file"}`.
 
 ---
 
-### 4.2 Quick Win — Enable + harden VT hash lookup for attachments
+### 4.2 Quick Win — Enable + harden VT hash lookup for attachments ✅ DONE (2026-10-01)
 
 **Goal:** Flip `ENABLE_VT_HASH_LOOKUP=True` and make the lookup safe.
+
+**Shipped:** `app/integrations/virustotal.py` rotates across all keys in
+`VIRUSTOTAL_API_KEYS` (429 → cooldown with Retry-After/escalating backoff;
+401/403 → key invalidated). Both the URL and attachment engines use it;
+`/api/health` reports pool status. Live `.env.prod` has `ENABLE_VT_HASH_LOOKUP=true`.
 
 **Files**
 - Edit `app/config.py`: default to `True`; add `VT_HASH_LOOKUP_ENABLED` tumbling and `VT_FILE_TIMEOUT_SECONDS: int = 10`.
@@ -485,6 +509,6 @@ Before merging any new engine/step, it must satisfy:
 
 1. `graphify --update` to refresh the navigation map (see §1).
 2. Re-add Redis to `docker-compose.yml` + implement `app/cache.py` (§4.1).
-3. Flip `ENABLE_VT_HASH_LOOKUP` and add key rotation (§4.2).
+3. ~~Flip `ENABLE_VT_HASH_LOOKUP` and add key rotation (§4.2)~~ ✅ done.
 4. Scaffold `app/worker.py` and move the scan off BackgroundTask behind `SCAN_MODE=async` (§4.3).
 5. Then begin Playwright (§4.4) and the Sysmon sandbox MVP in parallel (§4.5).

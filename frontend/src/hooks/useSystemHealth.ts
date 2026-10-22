@@ -1,9 +1,27 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getHealth } from '../api/client';
 
+export interface VtKeyState {
+  id: number;
+  masked: string;
+  state: 'ready' | 'cooldown' | 'invalid';
+  cooldown_remaining: number;
+  calls: number;
+}
+
+export interface VtRotation {
+  key_count: number;
+  available: number;
+  cooling_down: number;
+  invalid: number;
+  total_calls: number;
+  keys?: VtKeyState[];
+}
+
 export interface ComponentStatus {
   status: string;
   detail: string;
+  rotation?: VtRotation;
 }
 
 export interface HealthResponse {

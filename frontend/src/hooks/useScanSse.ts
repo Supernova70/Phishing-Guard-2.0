@@ -55,11 +55,13 @@ export function useScanSse({
     setConnected(false);
   }, []);
 
+  const connectRef = useRef<() => void>(() => {});
+
   const connect = useCallback(() => {
     if (!enabled || !scanId) return;
     cleanup();
 
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const es = new EventSource(`${baseUrl}/api/scans/${scanId}/events`);
     eventSourceRef.current = es;
 
@@ -92,12 +94,16 @@ export function useScanSse({
       setError('Connection lost');
       es.close();
       // Reconnect after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), 3000);
     };
   }, [scanId, enabled, onEvent, onComplete, onError, cleanup]);
 
   useEffect(() => {
-    connect();
+    connectRef.current = connect;
+  }, [connect]);
+
+  useEffect(() => {
+    queueMicrotask(() => connectRef.current());
     return cleanup;
   }, [connect, cleanup]);
 
@@ -127,7 +133,7 @@ export function subscribeToGlobalScans(listener: GlobalListener): () => void {
   globalListeners.add(listener);
 
   if (!globalEventSource) {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     globalEventSource = new EventSource(`${baseUrl}/api/scans/events`);
     globalEventSource.onmessage = (e) => {
       try {
@@ -143,7 +149,7 @@ export function subscribeToGlobalScans(listener: GlobalListener): () => void {
       // Retry after 5s
       setTimeout(() => {
         if (globalListeners.size > 0) {
-          const baseUrl2 = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+          const baseUrl2 = import.meta.env.VITE_API_BASE_URL || '';
           globalEventSource = new EventSource(`${baseUrl2}/api/scans/events`);
         }
       }, 5000);

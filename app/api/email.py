@@ -1,13 +1,14 @@
 """Email API endpoints."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.dependencies import SessionLocal, get_db
+from app.dependencies import SessionLocal, get_current_user, get_db, owned_or_404
 from app.models.email import Email
 from app.models.scan import Scan, ScanStatus
 from app.schemas.email import (
@@ -17,30 +18,63 @@ from app.schemas.email import (
     EmailListResponse,
 )
 from app.schemas.scan import ScanOut
+from app.models.user import User
 from app.services.email_service import EmailService
+from app.services.gmail_fetch import GmailAuthFailed, GmailNotConnected
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/emails", tags=["Emails"])
+
+SCAN_TIMEOUT_SECONDS = 240
+
+
+def email_numbers(db: Session, user_id: int) -> dict[int, int]:
+    """Per-account email sequence numbers: the user's oldest email = #1.
+
+    Global ``Email.id`` values interleave all accounts (user A's fifth email
+    can be id 187), so any user-facing "#N" must be this per-account rank —
+    never the raw id. Numbers are stable: ranked by insertion id ascending.
+    """
+    ids = [
+        row[0]
+        for row in db.query(Email.id)
+        .filter(Email.user_id == user_id)
+        .order_by(Email.id.asc())
+        .all()
+    ]
+    return {email_id: i + 1 for i, email_id in enumerate(ids)}
 
 
 @router.post("/fetch", response_model=FetchEmailsResponse)
 async def fetch_emails(
     limit: int = Query(20, ge=1, le=100, description="Max emails to fetch"),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Fetch recent emails from the configured IMAP inbox.
 
     Connects to the email server, downloads recent messages,
-    parses them, and stores them in the database.
+    parses them, and stores them in the database under the
+    signed-in account (row-level tenancy).
     """
     try:
-        service = EmailService(db)
+        service = EmailService(db, user_id=user.id)
         new_count, total_fetched = service.fetch_and_store(limit=limit)
         return FetchEmailsResponse(
             status="success",
             new_emails=new_count,
             total_fetched=total_fetched,
+        )
+    except GmailNotConnected as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except GmailAuthFailed:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Gmail access expired or was revoked — reconnect Gmail "
+                "by signing in with Google again"
+            ),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Email fetch failed: {str(e)}")
@@ -56,9 +90,10 @@ async def list_emails(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """List all fetched emails with pagination."""
-    query = db.query(Email)
+    """List the signed-in account's fetched emails with pagination."""
+    query = db.query(Email).filter(Email.user_id == user.id)
     
     if sender:
         query = query.filter(Email.sender.ilike(f"%{sender}%"))
@@ -82,20 +117,25 @@ async def list_emails(
         .limit(limit)
         .all()
     )
+    numbers = email_numbers(db, user.id)
     return EmailListResponse(
         total=total,
-        emails=[EmailOut(**e.to_dict()) for e in emails],
+        emails=[EmailOut(**e.to_dict(), number=numbers.get(e.id)) for e in emails],
     )
 
 
 @router.get("/{email_id}", response_model=EmailDetailOut)
-async def get_email(email_id: int, db: Session = Depends(get_db)):
-    """Get full email details by ID."""
+async def get_email(
+    email_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get full email details by ID (own emails only)."""
     email = db.query(Email).filter(Email.id == email_id).first()
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
+    owned_or_404(email, user)
 
     data = email.to_dict()
+    data["number"] = email_numbers(db, email.user_id).get(email.id)
     data["body_text"] = email.body_text
     data["body_html"] = email.body_html
     data["attachments"] = [att.to_dict() for att in email.attachments]
@@ -103,11 +143,14 @@ async def get_email(email_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{email_id}/latest-scan")
-async def get_latest_scan(email_id: int, db: Session = Depends(get_db)):
-    """Get the most recent scan result for a given email."""
+async def get_latest_scan(
+    email_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get the most recent scan result for a given email (own only)."""
     email = db.query(Email).filter(Email.id == email_id).first()
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
+    owned_or_404(email, user)
 
     scan = (
         db.query(Scan)
@@ -116,20 +159,62 @@ async def get_latest_scan(email_id: int, db: Session = Depends(get_db)):
         .first()
     )
     if scan:
-        return ScanOut(**scan.to_dict())
+        numbers = email_numbers(db, email.user_id)
+        return ScanOut(
+            **scan.to_dict(),
+            email_number=numbers.get(scan.email_id),
+            email_subject=email.subject,
+        )
     return {"scan": None}
 
 
 # ── Bulk Scan ──────────────────────────────────────────────
 
+def _mark_scan_error(scan_id: int) -> None:
+    """Mark a scan as ERROR using a fresh short-lived session.
+
+    Used on timeout, when the original session is still owned by the
+    abandoned worker thread — touching it would race the thread's
+    connection (and closing it could hand a live connection back to
+    the pool for another scan to corrupt).
+    """
+    err_db = SessionLocal()
+    try:
+        scan = err_db.query(Scan).filter(Scan.id == scan_id).first()
+        if scan:
+            scan.status = ScanStatus.ERROR.value
+            scan.completed_at = datetime.now(UTC).replace(tzinfo=None)
+            err_db.commit()
+    except Exception:
+        err_db.rollback()
+        logger.exception("Failed to mark timed-out scan %s as error", scan_id)
+    finally:
+        err_db.close()
+
+
 def _run_bulk_scan_task(scan_ids: list[int]) -> None:
-    """Run multiple scans using task-owned DB sessions."""
+    """Run multiple scans using task-owned DB sessions with per-scan timeout.
+
+    Important: the executor must NOT be used as a context manager here.
+    On timeout, `with ThreadPoolExecutor(...)` calls shutdown(wait=True),
+    which blocks forever waiting for the hung worker thread — the timeout
+    handler never ran, the current scan stayed RUNNING, and every scan
+    after it stayed PENDING forever. shutdown(wait=False) lets the queue
+    keep moving; startup recovery cleans up the abandoned RUNNING row.
+    """
     from app.services.scan_service import ScanService
 
     for scan_id in scan_ids:
         db = SessionLocal()
+        executor = ThreadPoolExecutor(max_workers=1)
+        timed_out = False
         try:
-            ScanService(db).run_scan_by_id(scan_id)
+            future = executor.submit(ScanService(db).run_scan_by_id, scan_id)
+            future.result(timeout=SCAN_TIMEOUT_SECONDS)
+        except FuturesTimeoutError:
+            timed_out = True
+            logger.error("Scan %s timed out after %ds — marking as error", scan_id, SCAN_TIMEOUT_SECONDS)
+            _mark_scan_error(scan_id)
         except Exception:
             logger.exception("Background bulk scan %s failed", scan_id)
             db.rollback()
@@ -139,7 +224,9 @@ def _run_bulk_scan_task(scan_ids: list[int]) -> None:
                 scan.completed_at = datetime.now(UTC).replace(tzinfo=None)
                 db.commit()
         finally:
-            db.close()
+            executor.shutdown(wait=False, cancel_futures=True)
+            if not timed_out:
+                db.close()   # on timeout the session belongs to the still-running thread
 
 
 class BulkScanRequest(BaseModel):
@@ -157,22 +244,23 @@ async def bulk_scan(
     request: BulkScanRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
-    Trigger scans on multiple emails at once.
+    Trigger scans on multiple of your emails at once.
 
-    Pass email_ids in the body, or omit to scan all unscanned emails.
+    Pass email_ids in the body, or omit to scan all your unscanned emails.
     """
     if request.email_ids:
         emails = (
             db.query(Email)
-            .filter(Email.id.in_(request.email_ids))
+            .filter(Email.user_id == user.id, Email.id.in_(request.email_ids))
             .all()
         )
     else:
         emails = (
             db.query(Email)
-            .filter(~Email.scans.any())
+            .filter(Email.user_id == user.id, ~Email.scans.any())
             .all()
         )
 
@@ -182,6 +270,7 @@ async def bulk_scan(
     scan_ids = []
     for email in emails:
         scan = Scan(
+            user_id=email.user_id,
             email_id=email.id,
             status=ScanStatus.PENDING.value,
             started_at=None,

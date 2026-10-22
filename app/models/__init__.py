@@ -1,5 +1,6 @@
 """
-Phishing Guard V2 — Database Models
+AI-Powered Email Threat Detection, GeoLocation & Forensic Intelligence Platform
+— Database Models (SIH 26106)
 
 Uses SQLAlchemy 2.0 declarative style with mapped_column.
 
@@ -18,7 +19,25 @@ class Base(DeclarativeBase):
 
 
 # Import all models — ORDER MATTERS for FK resolution
+from app.models.user import User  # noqa: F401, E402
 from app.models.email import Email, Attachment  # noqa: F401, E402
 from app.models.scan import Scan, Verdict  # noqa: F401, E402
 from app.models.fetch_state import FetchState  # noqa: F401, E402
 from app.models.url_result import UrlResult  # noqa: F401, E402
+from app.models.email_source import (  # noqa: F401, E402
+    EmailSource,
+    ReceivedHop,
+    AuthResult,
+)
+from app.models.ip_intel import IpIntel  # noqa: F401, E402
+from app.models.indicator import Indicator  # noqa: F401, E402
+from app.models.campaign import Campaign  # noqa: F401, E402
+from app.models.evidence import EvidenceChain  # noqa: F401, E402
+from app.models.audit_log import AuditLog  # noqa: F401, E402
+from app.models.alert import Alert  # noqa: F401, E402
+from app.models.user_permission import UserPermission  # noqa: F401, E402
+from app.models.feedback import VerdictFeedback  # noqa: F401, E402
+from app.models.finding import ScanFinding  # noqa: F401, E402
+from app.models.job import JobRun  # noqa: F401, E402
+from app.models.artifact import Artifact  # noqa: F401, E402
+from app.models.incident import Incident, ResponseAction  # noqa: F401, E402

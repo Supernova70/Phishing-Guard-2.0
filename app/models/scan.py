@@ -31,6 +31,9 @@ class Scan(Base):
     __tablename__ = "scans"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True, index=True
+    )
     email_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("emails.id"), index=True
     )
@@ -41,12 +44,20 @@ class Scan(Base):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Set by campaign clustering (nullable: unclustered scans have None)
+    campaign_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("campaigns.id"), nullable=True, index=True
+    )
+
     # ── Relationships ────────────────────────────────────
     email: Mapped["Email"] = relationship(back_populates="scans")  # type: ignore[name-defined]
     verdict: Mapped[Optional["Verdict"]] = relationship(
         back_populates="scan", uselist=False, cascade="all, delete-orphan"
     )
     url_results: Mapped[List["UrlResult"]] = relationship(  # type: ignore[name-defined]
+        back_populates="scan", cascade="all, delete-orphan"
+    )
+    findings: Mapped[List["ScanFinding"]] = relationship(  # type: ignore[name-defined]
         back_populates="scan", cascade="all, delete-orphan"
     )
 
@@ -86,6 +97,9 @@ class Verdict(Base):
     ai_label: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     url_score: Mapped[float] = mapped_column(Float, default=0.0)
     attachment_score: Mapped[float] = mapped_column(Float, default=0.0)
+    # Header-forensics score (SPF/DKIM/DMARC + relay anomalies); 0 when no
+    # header evidence exists (e.g. emails fetched before raw retention).
+    header_score: Mapped[float] = mapped_column(Float, default=0.0)
 
     # Detailed breakdown stored as JSON
     breakdown: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
@@ -107,6 +121,7 @@ class Verdict(Base):
             "ai_label": self.ai_label,
             "url_score": self.url_score,
             "attachment_score": self.attachment_score,
+            "header_score": self.header_score,
             "breakdown": self.breakdown,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

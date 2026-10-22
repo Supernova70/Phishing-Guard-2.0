@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,6 +22,7 @@ import { formatDistanceToNow, format } from 'date-fns';
 import type { Email, EmailDetail, Attachment } from '../types';
 
 type FilterType = 'all' | 'has_attachments' | 'scanned' | 'unscanned';
+type InboxSort = 'newest' | 'oldest' | 'sender' | 'subject' | 'score';
 
 // ─── Sender Avatar ─────────────────────────────────────────────────────────────
 function SenderAvatar({ sender }: { sender: string }) {
@@ -45,6 +46,60 @@ function SenderAvatar({ sender }: { sender: string }) {
     }}>
       {letter}
     </div>
+  );
+}
+
+// ─── Scan Status Chip ──────────────────────────────────────────────────────────
+const CHIP_STYLES: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  unscanned: { label: 'Unscanned', bg: 'transparent', color: 'var(--text-muted)', border: 'var(--border-default)' },
+  pending: { label: 'Queued', bg: 'rgba(56,189,248,0.10)', color: '#7DD3FC', border: 'rgba(56,189,248,0.45)' },
+  running: { label: 'Scanning…', bg: 'rgba(56,189,248,0.10)', color: '#7DD3FC', border: 'rgba(56,189,248,0.45)' },
+  error: { label: 'Scan failed', bg: 'rgba(239,68,68,0.10)', color: '#FCA5A5', border: 'rgba(239,68,68,0.45)' },
+  safe: { label: 'Safe', bg: 'rgba(16,185,129,0.12)', color: '#6EE7B7', border: 'rgba(16,185,129,0.5)' },
+  suspicious: { label: 'Suspicious', bg: 'rgba(245,158,11,0.12)', color: '#FCD34D', border: 'rgba(245,158,11,0.5)' },
+  dangerous: { label: 'Dangerous', bg: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: 'rgba(239,68,68,0.5)' },
+  scanned: { label: 'Scanned', bg: 'rgba(16,185,129,0.12)', color: '#6EE7B7', border: 'rgba(16,185,129,0.5)' },
+};
+
+function ScanStatusChip({ email }: { email: Email }) {
+  let key: string;
+  if (email.scan_count === 0) key = 'unscanned';
+  else if (email.latest_scan_status === 'pending') key = 'pending';
+  else if (email.latest_scan_status === 'running') key = 'running';
+  else if (email.latest_scan_status === 'error') key = 'error';
+  else if (email.latest_scan_status === 'complete' && email.latest_scan_classification)
+    key = email.latest_scan_classification;
+  else if (email.latest_scan_status === 'complete') key = 'scanned';
+  else key = 'unscanned';
+
+  const cfg = CHIP_STYLES[key];
+  return (
+    <span
+      title={
+        key === 'unscanned'
+          ? 'Not scanned yet — open it and run a scan'
+          : key === 'running' || key === 'pending'
+            ? 'Scan queued / running in the background'
+            : key === 'error'
+              ? 'Last scan failed'
+              : `Scanned — ${cfg.label}`
+      }
+      style={{
+        flexShrink: 0,
+        fontSize: '0.58rem',
+        fontWeight: 700,
+        padding: '1px 7px',
+        borderRadius: 9,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.05em',
+        whiteSpace: 'nowrap',
+        background: cfg.bg,
+        color: cfg.color,
+        border: `1px solid ${cfg.border}`,
+      }}
+    >
+      {cfg.label}
+    </span>
   );
 }
 
@@ -114,35 +169,53 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
   const { scan: polledScan, error: pollError, startPolling } = usePollScan();
 
   useEffect(() => {
-    if (alreadyScanned) setState('complete');
+    if (!alreadyScanned) return;
+    queueMicrotask(() => setState('complete'));
+    // Resolve the latest finished scan so "View Analysis" can navigate to it.
+    let cancelled = false;
+    fetch(`/api/emails/${emailId}/latest-scan`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const scan = data && !data.scan ? data : data?.scan;
+        if (!cancelled && scan && typeof scan.id === 'number' && scan.status === 'complete') {
+          setScanId(scan.id);
+          if (scan.verdict) setVerdict(scan.verdict);
+        }
+      })
+      .catch(() => { /* keep the disabled "Scan Complete" fallback */ });
+    return () => { cancelled = true; };
   }, [alreadyScanned, emailId]);
 
   useEffect(() => {
     if (state !== 'scanning' || !polledScan) return;
-    if (polledScan.status === 'complete') {
-      setVerdict(polledScan.verdict);
-      setState('complete');
-      onComplete();
-    } else if (polledScan.status === 'error') {
-      setScanError('The background scan failed. Check backend logs for details.');
-      setState('failed');
-    }
+    queueMicrotask(() => {
+      if (polledScan.status === 'complete') {
+        setVerdict(polledScan.verdict);
+        setState('complete');
+        onComplete();
+      } else if (polledScan.status === 'error') {
+        setScanError('The background scan failed. Check backend logs for details.');
+        setState('failed');
+      }
+    });
   }, [polledScan, state, onComplete]);
 
   useEffect(() => {
-    if (state === 'scanning' && pollError) {
+    if (state !== 'scanning' || !pollError) return;
+    queueMicrotask(() => {
       setScanError(pollError);
       setState('failed');
-    }
+    });
   }, [pollError, state]);
 
   const handleScan = async () => {
-    if (state !== 'idle' && state !== 'failed') return;
+    if (state === 'scanning') return;
     setState('scanning');
     setScanError('');
+    setVerdict(null);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8080/scans/${emailId}`, {
+      const response = await fetch(`/api/scans/${emailId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -182,29 +255,51 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <motion.button
-        layout
-        onClick={handleScan}
-        disabled={state === 'scanning' || state === 'complete'}
-        style={{
-          background: cfg.bg,
-          color: cfg.color,
-          border: `1px solid ${cfg.border}`,
-          borderRadius: 6,
-          padding: '8px 18px',
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          cursor: state === 'scanning' || state === 'complete' ? 'not-allowed' : 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          transition: 'all 250ms ease',
-          width: 'fit-content',
-        }}
-      >
-        {cfg.icon}
-        {cfg.label}
-      </motion.button>
+      {state === 'complete' && scanId !== null ? (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn-primary"
+            onClick={() => navigate(`/scans/${scanId}`)}
+            style={{ fontSize: '0.875rem', padding: '8px 18px' }}
+          >
+            <ScanSearch size={14} />
+            View Analysis →
+          </button>
+          <button
+            className="btn-ghost"
+            onClick={handleScan}
+            style={{ fontSize: '0.8rem', padding: '7px 14px' }}
+            title="Run the scan again"
+          >
+            <RefreshCw size={13} />
+            Re-scan
+          </button>
+        </div>
+      ) : (
+        <motion.button
+          layout
+          onClick={handleScan}
+          disabled={state === 'scanning' || state === 'complete'}
+          style={{
+            background: cfg.bg,
+            color: cfg.color,
+            border: `1px solid ${cfg.border}`,
+            borderRadius: 6,
+            padding: '8px 18px',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            cursor: state === 'scanning' || state === 'complete' ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'all 250ms ease',
+            width: 'fit-content',
+          }}
+        >
+          {cfg.icon}
+          {cfg.label}
+        </motion.button>
+      )}
 
       {/* Scanning indicator */}
       {state === 'scanning' && (
@@ -279,10 +374,15 @@ function RunScanButton({ emailId, alreadyScanned, onComplete }: { emailId: numbe
 function EmailDetailPanel({ emailId, onScanComplete }: { emailId: number; onScanComplete: () => void }) {
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'text' | 'html'>('text');
+  const [viewMode, setViewMode] = useState<'text' | 'html' | null>(null);
+  const [htmlHeight, setHtmlHeight] = useState(360);
 
   useEffect(() => {
-    setLoading(true);
+    queueMicrotask(() => {
+      setLoading(true);
+      setViewMode(null);
+      setHtmlHeight(360);
+    });
     getEmail(emailId).then(setDetail).finally(() => setLoading(false));
   }, [emailId]);
 
@@ -297,6 +397,10 @@ function EmailDetailPanel({ emailId, onScanComplete }: { emailId: number; onScan
   if (!detail) return null;
 
   const isScanned = detail.scan_count > 0;
+  // HTML Preview is the default tab (falls back to Plain Text for
+  // text-only emails) until the user picks a tab explicitly.
+  const activeMode: 'text' | 'html' =
+    viewMode ?? (detail.has_html && detail.body_html ? 'html' : 'text');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -332,7 +436,7 @@ function EmailDetailPanel({ emailId, onScanComplete }: { emailId: number; onScan
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Toggle */}
         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-input)', borderRadius: 6, padding: 3, width: 'fit-content' }}>
-          {(['text', 'html'] as const).map((mode) => (
+          {(['html', 'text'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -343,8 +447,8 @@ function EmailDetailPanel({ emailId, onScanComplete }: { emailId: number; onScan
                 borderRadius: 4,
                 border: 'none',
                 cursor: 'pointer',
-                background: viewMode === mode ? 'var(--bg-card)' : 'transparent',
-                color: viewMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
+                background: activeMode === mode ? 'var(--bg-card)' : 'transparent',
+                color: activeMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
                 transition: 'all 200ms',
               }}
             >
@@ -353,28 +457,44 @@ function EmailDetailPanel({ emailId, onScanComplete }: { emailId: number; onScan
           ))}
         </div>
 
-        {viewMode === 'text' ? (
-          <pre className="font-mono" style={{
-            fontSize: '0.78rem',
-            color: 'var(--text-secondary)',
-            lineHeight: 1.7,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 6,
-            padding: 16,
-            minHeight: 120,
-          }}>
+        {activeMode === 'text' ? (
+          <pre
+            className="font-mono"
+            style={{
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.7,
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              minWidth: 0,
+              maxWidth: '100%',
+              // Explicit minHeight would otherwise become the flex-shrink
+              // floor and collapse long emails to 120px (text spilling over
+              // sibling elements). Keep the box at its natural height.
+              flexShrink: 0,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 6,
+              padding: 16,
+              minHeight: 120,
+              boxSizing: 'border-box',
+            }}
+          >
             {detail.body_text ?? '(no plain text body)'}
           </pre>
         ) : (
-          <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
             {detail.has_html && detail.body_html ? (
               <iframe
                 srcDoc={detail.body_html}
                 sandbox="allow-same-origin"
-                style={{ width: '100%', minHeight: 300, border: 'none', background: 'white' }}
+                onLoad={(ev) => {
+                  try {
+                    const h = ev.currentTarget.contentDocument?.documentElement?.scrollHeight ?? 0;
+                    if (h > 0) setHtmlHeight(Math.min(Math.max(h + 20, 360), 6000));
+                  } catch { /* keep default height; iframe scrolls internally */ }
+                }}
+                style={{ width: '100%', height: htmlHeight, flexShrink: 0, border: 'none', background: 'white', display: 'block' }}
                 title="Email HTML Preview"
               />
             ) : (
@@ -407,13 +527,14 @@ export function EmailInbox() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [sortKey, setSortKey] = useState<InboxSort>('newest');
   const [, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkScanning, setBulkScanning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ queued: number; done: number } | null>(null);
 
-  const loadEmails = async () => {
-    setLoading(true);
+  const loadEmails = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     try {
       const data = await getEmails(0, 100);
       // Sort newest first (fetched_at DESC) as a client-side safety net
@@ -423,13 +544,15 @@ export function EmailInbox() {
         return dateB - dateA; // descending — newest first
       });
       setEmails(sorted);
-      if (sorted.length > 0 && !selectedId) setSelectedId(sorted[0].id);
+      if (!opts?.quiet && sorted.length > 0) {
+        setSelectedId((prev) => prev ?? sorted[0].id);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
-  };
+  }, []);
 
   const handleFetch = async () => {
     setFetching(true);
@@ -478,7 +601,17 @@ export function EmailInbox() {
     }
   };
 
-  useEffect(() => { loadEmails(); }, []);
+  useEffect(() => { void loadEmails(); }, [loadEmails]);
+
+  // Keep scan-status chips fresh while background scans are queued/running.
+  const hasActiveScans = emails.some(
+    (e) => e.latest_scan_status === 'pending' || e.latest_scan_status === 'running'
+  );
+  useEffect(() => {
+    if (!hasActiveScans) return;
+    const t = setInterval(() => { void loadEmails({ quiet: true }); }, 4000);
+    return () => clearInterval(t);
+  }, [hasActiveScans, loadEmails]);
 
   const filtered = useMemo(() => {
     let list = emails;
@@ -489,8 +622,18 @@ export function EmailInbox() {
     if (filter === 'has_attachments') list = list.filter((e) => e.has_attachments);
     else if (filter === 'scanned') list = list.filter((e) => e.scan_count > 0);
     else if (filter === 'unscanned') list = list.filter((e) => e.scan_count === 0);
-    return list;
-  }, [emails, search, filter]);
+
+    const ts = (e: Email) => new Date(e.date ?? e.fetched_at).getTime() || 0;
+    return [...list].sort((a, b) => {
+      switch (sortKey) {
+        case 'oldest': return ts(a) - ts(b);
+        case 'sender': return a.sender.localeCompare(b.sender);
+        case 'subject': return (a.subject ?? '').localeCompare(b.subject ?? '');
+        case 'score': return (b.latest_scan_score ?? -1) - (a.latest_scan_score ?? -1);
+        default: return ts(b) - ts(a); // newest received first
+      }
+    });
+  }, [emails, search, filter, sortKey]);
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -545,9 +688,27 @@ export function EmailInbox() {
               </button>
             ))}
           </div>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            Showing {filtered.length} of {emails.length} emails
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              Showing {filtered.length} of {emails.length} emails
+            </span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sort:</span>
+              <select
+                className="dark-input"
+                aria-label="Sort emails"
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as InboxSort)}
+                style={{ fontSize: '0.7rem', padding: '3px 6px' }}
+              >
+                <option value="newest">Latest received</option>
+                <option value="oldest">Oldest first</option>
+                <option value="sender">Sender A–Z</option>
+                <option value="subject">Subject A–Z</option>
+                <option value="score">Scan score</option>
+              </select>
+            </label>
+          </div>
           {/* Bulk Actions */}
           {selectedIds.size > 0 && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', background: 'var(--primary-glow)', borderRadius: 6, border: '1px solid var(--primary)' }}>
@@ -650,9 +811,12 @@ export function EmailInbox() {
                           </span>
                         </div>
                       </div>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                        {email.subject || '(no subject)'}
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <p style={{ flex: 1, minWidth: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {email.subject || '(no subject)'}
+                        </p>
+                        <ScanStatusChip email={email} />
+                      </div>
                     </div>
                   </motion.div>
                 );

@@ -24,7 +24,6 @@ Usage (mirrors text_analyzer.py pattern):
 import io
 import logging
 import os
-import httpx
 from dataclasses import dataclass, field
 from typing import List, Optional, TYPE_CHECKING
 
@@ -33,8 +32,11 @@ from app.engines.analyzers.base import FileAnalysisResult
 from app.engines.analyzers.pe_analyzer import analyze_pe
 from app.engines.analyzers.pdf_analyzer import analyze_pdf
 from app.engines.analyzers.office_analyzer import analyze_office
-from app.engines.analyzers.generic_analyzer import analyze_generic
+from app.engines.analyzers.generic_analyzer import analyze_generic, DOUBLE_EXT_PATTERN
+from app.engines.analyzers.qr_analyzer import analyze_attachment_bytes
 from app.engines.analyzers.yara_scanner import YaraScanner
+from app.engines.analyzers.file_types import classify_bucket
+from app.integrations.virustotal import VirusTotalClient
 
 if TYPE_CHECKING:
     from app.models.email import Attachment
@@ -94,6 +96,7 @@ class AttachmentAnalyzer:
         self._settings = get_settings()
         self._max_bytes = self._settings.MAX_ATTACHMENT_BYTES
         self._yara = YaraScanner()  # Loads/caches compiled rules on first call
+        self._vt = VirusTotalClient()  # Multi-key rotation shared with URL engine
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -136,6 +139,9 @@ class AttachmentAnalyzer:
                 "mime_mismatch": file_result.mime_mismatch,
                 "findings": file_result.findings,
                 "indicators": file_result.indicators,
+                "qr_codes": file_result.indicators.get("qr_codes", []),
+                "score_breakdown": file_result.score_breakdown,
+                "embedded_urls": file_result.indicators.get("embedded_urls", []),
                 "yara_matches": file_result.indicators.get("yara_matches", []),
                 "sha256": att.sha256_hash,
                 "vt_malicious": file_result.vt_malicious,
@@ -215,28 +221,98 @@ class AttachmentAnalyzer:
         file_result = self._route_analyzer(data, filename, detected_mime)
         file_result.mime_mismatch = mime_mismatch
 
+        # File-type bucket gates which YARA rules may apply (rule meta
+        # applies_to): PowerShell rules on a PNG are byte-coincidence bait.
+        bucket = classify_bucket(data, filename, detected_mime)
+        breakdown: List[dict] = list(file_result.indicators.get("signals") or [])
+        if not breakdown and file_result.risk_score > 0.0:
+            breakdown.append({
+                "signal": f"{file_result.file_type} static analysis",
+                "points": round(file_result.risk_score, 1),
+                "detail": "; ".join(file_result.findings[:2]) or "format-specific heuristics",
+            })
+
+        # ── Quishing: decode QR/barcodes in images and PDFs ───────
+        # The decoded payload is preserved for forensics and its URLs are
+        # scored by the URL engine later in the pipeline; QR presence alone
+        # is not risk (legitimate documents carry QR codes too).
+        try:
+            qr_summary = analyze_attachment_bytes(data, filename)
+        except Exception as exc:  # pragma: no cover - decoder edge case
+            logger.debug("QR decode failed for '%s': %s", filename, exc)
+            qr_summary = {"codes": [], "urls": [], "count": 0}
+        if qr_summary["count"]:
+            file_result.indicators["qr_codes"] = qr_summary["codes"]
+            file_result.indicators["qr_urls"] = qr_summary["urls"]
+            breakdown.append({
+                "signal": "QR / barcode payload",
+                "points": 0.0,
+                "detail": (
+                    f"{qr_summary['count']} symbol(s) decoded; "
+                    f"{len(qr_summary['urls'])} URL(s) sent to the URL engine"
+                ),
+            })
+            for url in qr_summary["urls"][:3]:
+                file_result.findings.append(
+                    f"QR code in '{filename}' decodes to URL: {url}"
+                )
+            if not qr_summary["urls"]:
+                preview = qr_summary["codes"][0]["value"][:80]
+                file_result.findings.append(
+                    f"QR/barcode in '{filename}' decodes to non-URL payload: {preview}"
+                )
+
         if mime_mismatch:
             file_result.findings.insert(
                 0,
                 f"MIME mismatch: declared '{declared_mime}' but file magic says '{detected_mime}'"
             )
             file_result.risk_score = min(100.0, file_result.risk_score + 20.0)
+            breakdown.append({
+                "signal": "MIME type mismatch",
+                "points": 20.0,
+                "detail": f"declared '{declared_mime}' but file magic says '{detected_mime}'",
+            })
 
-        # ── YARA scan (runs on ALL files, regardless of type) ─────
-        yara_result = self._yara.scan(data, filename)
+        # Filename masquerading (invoice.pdf.exe) must score no matter
+        # which analyzer handled the content — a fake ".exe" carrying PDF
+        # bytes routes to the PDF analyzer, which knows nothing about
+        # double extensions. generic_analyzer sets the same indicator
+        # when it is the one that ran; don't count the signal twice.
+        if (
+            not file_result.indicators.get("double_extension")
+            and DOUBLE_EXT_PATTERN.search(filename)
+        ):
+            file_result.indicators["double_extension"] = True
+            file_result.findings.append(
+                f"Double extension detected: '{filename}' — classic trick to disguise executables"
+            )
+            file_result.risk_score = min(100.0, file_result.risk_score + 30.0)
+            breakdown.append({
+                "signal": "Double extension",
+                "points": 30.0,
+                "detail": f"'{filename}'",
+            })
+
+        # ── YARA scan (rules gated by file-type applicability) ─────
+        yara_result = self._yara.scan(data, filename, bucket=bucket)
         if yara_result.matched:
             # Prepend YARA findings so they appear first in the list
             for finding in reversed(yara_result.findings):
                 file_result.findings.insert(0, finding)
 
-            # Store structured YARA match data in the indicators dict
+            # Structured YARA match data: identity + hard evidence (offset,
+            # matched bytes) + rule author's explanation — the UI renders
+            # all of it so analysts see exactly why something is suspicious.
             file_result.indicators["yara_matches"] = [
                 {
                     "rule": m.rule_name,
                     "severity": m.severity,
                     "tags": m.tags,
                     "description": m.description,
+                    "explanation": m.explanation,
                     "matched_strings": m.matched_strings,
+                    "evidence": m.evidence,
                 }
                 for m in yara_result.matches
             ]
@@ -247,8 +323,23 @@ class AttachmentAnalyzer:
                 100.0,
                 max(file_result.risk_score, yara_result.yara_score)
             )
+            for m in yara_result.matches:
+                breakdown.append({
+                    "signal": f"YARA {m.rule_name} ({m.severity})",
+                    "points": m.score_contribution,
+                    "detail": m.explanation or m.description,
+                    "evidence": [
+                        f"{e['string']} @ 0x{e['offset']:x}: “{e['preview']}”"
+                        for e in m.evidence[:3]
+                    ],
+                })
 
-        elif yara_result.error:
+        # Transparency: rules that matched raw bytes but were not applicable
+        # to this file type (suppression is a tuning decision, not silence).
+        for note in yara_result.suppressed:
+            file_result.findings.append(note)
+
+        if yara_result.error:
             logger.debug(f"YARA note for '{filename}': {yara_result.error}")
 
         # ── VirusTotal hash lookup (if enabled) ───────────────────────
@@ -275,19 +366,28 @@ class AttachmentAnalyzer:
             file_result.findings.insert(
                 0, f"VirusTotal: {vt_result['malicious']} engines flagged as malicious"
             )
+            breakdown.append({
+                "signal": "VirusTotal engines",
+                "points": round(vt_score, 1),
+                "detail": (
+                    f"{vt_result['malicious']} malicious + "
+                    f"{vt_result['suspicious']} suspicious of "
+                    f"{vt_result['total']} engines"
+                ),
+            })
 
+        file_result.score_breakdown = breakdown
         return file_result
 
     def _vt_hash_lookup(self, sha256: str) -> dict:
         """
-        Look up a file hash on VirusTotal.
+        Look up a file hash on VirusTotal (multi-key rotation).
         Uses GET /api/v3/files/{hash} endpoint.
         Returns dict with keys: malicious, suspicious, harmless, total, error
         """
-        settings = get_settings()
-        vt_keys = settings.vt_api_keys
+        settings = self._settings
 
-        if not vt_keys:
+        if not settings.vt_api_keys:
             return {
                 "malicious": 0, "suspicious": 0,
                 "harmless": 0, "total": 0,
@@ -301,69 +401,52 @@ class AttachmentAnalyzer:
                 "error": "Invalid SHA256 hash",
             }
 
-        api_key = vt_keys[0]  # use first key (rotation can come later)
+        status, data, err = self._vt.get(f"/files/{sha256}")
 
-        try:
-            with httpx.Client(timeout=10) as client:
-                resp = client.get(
-                    f"https://www.virustotal.com/api/v3/files/{sha256}",
-                    headers={"x-apikey": api_key},
-                )
-
-            if resp.status_code == 200:
-                data = resp.json()
-                stats = (
-                    data.get("data", {})
+        if status == 200:
+            stats = (
+                (data or {}).get("data", {})
                         .get("attributes", {})
                         .get("last_analysis_stats", {})
-                )
-                malicious  = int(stats.get("malicious", 0))
-                suspicious = int(stats.get("suspicious", 0))
-                harmless   = int(stats.get("harmless", 0))
-                undetected = int(stats.get("undetected", 0))
-                total = malicious + suspicious + harmless + undetected
-                logger.info(
-                    f"VT file result for {sha256[:8]}…: "
-                    f"malicious={malicious} suspicious={suspicious} total={total}"
-                )
-                return {
-                    "malicious": malicious,
-                    "suspicious": suspicious,
-                    "harmless": harmless,
-                    "total": total,
-                    "error": None,
-                }
+            )
+            malicious  = int(stats.get("malicious", 0))
+            suspicious = int(stats.get("suspicious", 0))
+            harmless   = int(stats.get("harmless", 0))
+            undetected = int(stats.get("undetected", 0))
+            total = malicious + suspicious + harmless + undetected
+            logger.info(
+                f"VT file result for {sha256[:8]}…: "
+                f"malicious={malicious} suspicious={suspicious} total={total}"
+            )
+            return {
+                "malicious": malicious,
+                "suspicious": suspicious,
+                "harmless": harmless,
+                "total": total,
+                "error": None,
+            }
 
-            elif resp.status_code == 404:
-                # File not in VT database — common for clean/unknown files
-                return {
-                    "malicious": 0, "suspicious": 0,
-                    "harmless": 0, "total": 0,
-                    "error": "File not in VT database (possibly clean or unknown)",
-                }
-
-            elif resp.status_code == 429:
-                logger.warning("VT rate limit hit for file hash lookup")
-                return {
-                    "malicious": 0, "suspicious": 0,
-                    "harmless": 0, "total": 0,
-                    "error": "VT rate limit (429)",
-                }
-
-            else:
-                return {
-                    "malicious": 0, "suspicious": 0,
-                    "harmless": 0, "total": 0,
-                    "error": f"VT HTTP {resp.status_code}",
-                }
-
-        except Exception as e:
-            logger.error(f"VT file hash lookup failed for {sha256[:8]}…: {e}")
+        if status == 404:
+            # File not in VT database — common for clean/unknown files
             return {
                 "malicious": 0, "suspicious": 0,
                 "harmless": 0, "total": 0,
-                "error": str(e)[:100],
+                "error": "File not in VT database (possibly clean or unknown)",
             }
+
+        if status == 429:
+            logger.warning("VT rate limit hit for file hash lookup (all keys)")
+            return {
+                "malicious": 0, "suspicious": 0,
+                "harmless": 0, "total": 0,
+                "error": err or "VT rate limit (429)",
+            }
+
+        return {
+            "malicious": 0, "suspicious": 0,
+            "harmless": 0, "total": 0,
+            "error": err or f"VT HTTP {status}",
+        }
 
 
     def _detect_mime(self, data: bytes) -> Optional[str]:
@@ -396,8 +479,12 @@ class AttachmentAnalyzer:
 
         # ── PE files ──────────────────────────────────────────────
         if mime in PE_MIMES or ext in PE_EXTS:
-            # Extra guard: check for actual MZ header before routing to PE analyzer
-            if data[:2] == b"MZ" or ext in PE_EXTS:
+            # Require an actual MZ header before routing to the PE
+            # analyzer. A ".pdf.exe" with no executable header is the
+            # masquerading trick itself — routing it to the PE analyzer
+            # just errors out with score 0; falling through to generic
+            # lets the double-extension + entropy rules score it.
+            if data[:2] == b"MZ":
                 logger.debug(f"Routing '{filename}' → PE analyzer")
                 return analyze_pe(data, filename)
 

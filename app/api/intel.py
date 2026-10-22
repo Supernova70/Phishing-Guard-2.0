@@ -1,0 +1,850 @@
+"""Intelligence endpoints — header forensics, origin trace, graph, campaigns.
+
+Week 2 surface for the engines added alongside this plan:
+
+  GET  /emails/{email_id}/headers   parsed Received chain + auth results
+  GET  /emails/{email_id}/trace     origin trace + geo/ASN/reputation intel
+  GET  /ips/{ip}                    cached (or refreshed) IP intelligence
+  GET  /indicators                  IoC search for the graph/campaign UI
+  GET  /graph                       nodes/edges JSON (node-capped)
+  GET  /campaigns                   clustered phishing runs
+  GET  /campaigns/{campaign_id}     campaign detail + member scans
+  POST /campaigns/recluster         backfill clustering over all scans
+
+All enrichment degrades gracefully: offline runs return cached/absent
+intel instead of failing, and live lookups only happen when explicitly
+requested (`refresh=true`) or DNS is opted in.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.dependencies import get_current_user, get_db, owned_or_404
+from app.engines.correlation.campaign_clustering import (
+    ScanInput,
+    cluster_scans,
+    save_clusters,
+)
+from app.engines.correlation.graph_builder import build_graph_from_db
+from app.engines.headers.received_parser import parse_received_chain
+from app.engines.headers.common import registrable_domain
+from app.engines.intel.origin import build_origin_trace
+from app.engines.ioc_export import build_csv, build_stix_bundle
+from app.engines.mitre import aggregate_techniques, map_attack_techniques, summarize_tactics
+from app.engines.lookalike import KNOWN_REGISTRABLE_LABELS, LEGIT_EMBEDDED
+from app.engines.url_analyzer import LEGITIMATE_SERVICE_DOMAINS
+from app.models.campaign import Campaign
+from app.models.email import Email
+from app.models.indicator import Indicator
+from app.models.ip_intel import IpIntel
+from app.models.scan import Scan, Verdict
+from app.models.url_result import UrlResult
+from app.models.user import User
+from app.services.ip_intel_service import IpIntelService
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["Intelligence"])
+
+# Trace enrichment caps — keep provider quota use bounded per request.
+TRACE_REFRESH_MAX_IPS = 10   # refresh=true: enrich synchronously
+TRACE_BG_MAX_IPS = 6         # background: queued after the response
+
+
+def _get_email(db: Session, email_id: int, user: User) -> Email:
+    email = db.query(Email).filter(Email.id == email_id).first()
+    owned_or_404(email, user)
+    return email
+
+
+def _hops_payload(db: Session, email: Email) -> list:
+    from app.models.email_source import ReceivedHop
+
+    rows = (
+        db.query(ReceivedHop)
+        .filter(ReceivedHop.email_id == email.id)
+        .order_by(ReceivedHop.hop_index)
+        .all()
+    )
+    if rows:
+        return [
+            {
+                "hop_index": r.hop_index,
+                "from_host": r.from_host,
+                "from_ip": r.from_ip,
+                "helo": r.helo,
+                "by_host": r.by_host,
+                "via": r.via,
+                "protocol": r.protocol,
+                "timestamp": (
+                    r.timestamp_utc.isoformat() if r.timestamp_utc else None
+                ),
+                "is_internal": r.is_internal,
+                "raw": r.raw,
+            }
+            for r in rows
+        ]
+    # Fallback: re-parse retained headers (emails ingested before hop rows)
+    source = email.source
+    if source and source.headers_json:
+        hops = parse_received_chain(source.headers_json.get("received", []))
+        return [
+            {
+                "hop_index": i,
+                "from_host": h.from_host,
+                "from_ip": h.from_ip,
+                "helo": h.helo,
+                "by_host": h.by_host,
+                "via": h.via,
+                "protocol": h.protocol,
+                "timestamp": h.timestamp_utc.isoformat() if h.timestamp_utc else None,
+                "is_internal": h.is_internal,
+                "raw": h.raw,
+            }
+            for i, h in enumerate(hops)
+        ]
+    return []
+
+
+def _own_hop_ip_subquery(db: Session, user: User):
+    """Distinct hop IPs from the signed-in account's emails."""
+    from app.models.email_source import ReceivedHop
+
+    return (
+        db.query(ReceivedHop.from_ip)
+        .join(Email, Email.id == ReceivedHop.email_id)
+        .filter(Email.user_id == user.id, ReceivedHop.from_ip.isnot(None))
+        .distinct()
+        .subquery()
+    )
+
+
+@router.get("/emails/{email_id}/headers")
+async def get_email_headers(
+    email_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Parsed header evidence: Received chain + SPF/DKIM/DMARC results."""
+    email = _get_email(db, email_id, user)
+    source = email.source
+
+    from app.models.email_source import AuthResult
+
+    auth_row = (
+        db.query(AuthResult).filter(AuthResult.email_id == email_id).first()
+    )
+    present = bool(source and source.headers_json)
+    if present:
+        from app.services.evidence_service import audit
+
+        audit(
+            db,
+            "raw_view",
+            actor=user.email,
+            entity_type="email_headers",
+            entity_id=email_id,
+            detail={"raw_sha256": source.raw_sha256 if source else None},
+            user_id=user.id,
+        )
+    return {
+        "email_id": email_id,
+        "present": present,
+        "headers": (source.headers_json if source else None),
+        "hops": _hops_payload(db, email),
+        "auth": auth_row.to_dict() if auth_row else None,
+        "raw_path": source.raw_path if source else None,
+        "raw_sha256": source.raw_sha256 if source else None,
+        "size_bytes": source.size_bytes if source else None,
+    }
+
+
+def _enrich_ips_background(ips: list) -> None:
+    """Post-response job: fill the ip_intel cache for trace IPs.
+
+    Runs after the response is sent so the trace page renders instantly
+    with whatever is cached, then picks up geo/ASN rows a few seconds
+    later (the FE re-polls while `enriching > 0`). Own session — the
+    request-scoped one is already closed.
+    """
+    if not ips:
+        return
+    from app.dependencies import SessionLocal
+
+    db = SessionLocal()
+    try:
+        settings = get_settings()
+        ptr_resolver = (
+            _live_dns_resolver() if settings.HEADER_DNS_CHECKS_ENABLED else None
+        )
+        service = IpIntelService(db, ptr_resolver=ptr_resolver)
+        for ip in ips:
+            try:
+                service.enrich(ip)
+                db.commit()
+            except Exception:
+                # Parallel trace views can race the same IP — a duplicate
+                # insert means another task already wrote it, which is a
+                # success, not a failure.
+                try:
+                    db.rollback()
+                except Exception:  # pragma: no cover - defensive
+                    pass
+                if service.cached_only(ip) is None:
+                    logger.warning(
+                        "background ip enrichment failed for %s", ip, exc_info=True
+                    )
+    except Exception:
+        logger.warning("background ip enrichment failed", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:  # pragma: no cover - defensive
+            pass
+    finally:
+        db.close()
+
+
+@router.get("/emails/{email_id}/trace")
+async def get_email_trace(
+    email_id: int,
+    background_tasks: BackgroundTasks,
+    refresh: bool = Query(False, description="Force live geo/IP enrichment"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Origin trace: earliest external hop + geo/ASN/reputation intel.
+
+    Cache-only by default; missing IPs are enriched in the background
+    (`enriching` in the payload tells the FE to re-poll), and
+    `refresh=true` enriches synchronously (origin first, then hops).
+    """
+    email = _get_email(db, email_id, user)
+    hops = _hops_payload(db, email)
+
+    # Origin from parsed hop dicts (chronological order guaranteed)
+    origin = build_origin_trace(
+        [
+            {
+                "from_ip": h["from_ip"],
+                "from_host": h["from_host"],
+                "helo": h["helo"],
+                "by_host": h["by_host"],
+                "timestamp_utc": h["timestamp"],
+                "is_internal": h["is_internal"],
+            }
+            for h in hops
+        ]
+    )
+
+    # Cached per-hop geo (DB-only unless enrichment runs below) — feeds
+    # the trace polyline (plan §6.1 / backlog FE-C6).
+    hop_ips = sorted({h["from_ip"] for h in hops if h.get("from_ip")})
+    all_ips = list(dict.fromkeys(([origin.ip] if origin else []) + hop_ips))
+    now = datetime.utcnow()
+    fresh: set = set()
+    if all_ips:
+        for (ip,) in (
+            db.query(IpIntel.ip)
+            .filter(IpIntel.ip.in_(all_ips))
+            .filter((IpIntel.expires_at.is_(None)) | (IpIntel.expires_at > now))
+            .all()
+        ):
+            fresh.add(ip)
+    missing = [ip for ip in all_ips if ip not in fresh]
+
+    intel = None
+    enriching = 0
+    if origin is not None or missing:
+        settings = get_settings()
+        ptr_resolver = (
+            _live_dns_resolver() if settings.HEADER_DNS_CHECKS_ENABLED else None
+        )
+        service = IpIntelService(db, ptr_resolver=ptr_resolver)
+        if refresh:
+            if origin is not None:
+                intel = service.enrich(origin.ip)
+            extra = [ip for ip in missing if origin is None or ip != origin.ip]
+            for ip in extra[: max(TRACE_REFRESH_MAX_IPS - 1, 0)]:
+                service.enrich(ip)
+            if missing:
+                # get_db never commits — persist enrichment so the next
+                # request is a cache hit instead of a network re-fetch.
+                db.commit()
+        else:
+            if origin is not None:
+                intel = service.cached_only(origin.ip)
+            auto = bool(getattr(settings, "IP_INTEL_AUTO_ENRICH", True))
+            if missing and auto:
+                queued = missing[:TRACE_BG_MAX_IPS]
+                enriching = len(queued)
+                background_tasks.add_task(_enrich_ips_background, queued)
+
+    cached_geo: dict = {}
+    if hop_ips:
+        for row in db.query(IpIntel).filter(IpIntel.ip.in_(hop_ips)).all():
+            if row.lat is not None and row.lon is not None:
+                cached_geo[row.ip] = {
+                    "lat": row.lat,
+                    "lon": row.lon,
+                    "country": row.country,
+                    "country_code": row.country_code,
+                }
+    for h in hops:
+        h["geo"] = cached_geo.get(h["from_ip"]) if h.get("from_ip") else None
+
+    return {
+        "email_id": email_id,
+        "origin": origin.to_dict() if origin else None,
+        "hops": hops,
+        "intel": intel.to_dict() if intel else None,
+        "enriching": enriching,
+    }
+
+
+@router.get("/attribution/stats")
+async def attribution_stats(
+    limit: int = Query(500, ge=1, le=5000),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Attribution-kind counts over recent verdicts (plan §6 KPI, FE-C5).
+
+    Aggregates `breakdown.attribution.kind` from the newest verdicts —
+    the data behind the dashboard's attribution split donut. Cache-only;
+    never triggers lookups.
+    """
+    rows = (
+        db.query(Verdict.breakdown)
+        .join(Scan, Scan.id == Verdict.scan_id)
+        .filter(Scan.user_id == user.id)
+        .order_by(Verdict.id.desc())
+        .limit(limit)
+        .all()
+    )
+    counts: dict = {}
+    for (breakdown,) in rows:
+        attribution = (breakdown or {}).get("attribution") or {}
+        kind = attribution.get("kind") or "unknown"
+        counts[kind] = counts.get(kind, 0) + 1
+    total = sum(counts.values())
+    return {
+        "total": total,
+        "kinds": [
+            {"kind": kind, "count": n}
+            for kind, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ],
+    }
+
+
+@router.get("/ips/stats")
+async def ip_stats(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Account-scoped geo stats (IPs seen in your emails' hop chains)."""
+    from sqlalchemy import func, select
+
+    hop_ips = _own_hop_ip_subquery(db, user)
+    scoped = db.query(IpIntel).filter(IpIntel.ip.in_(select(hop_ips.c.from_ip)))
+    rows = (
+        db.query(IpIntel.country, func.count(IpIntel.ip))
+        .filter(IpIntel.ip.in_(select(hop_ips.c.from_ip)))
+        .group_by(IpIntel.country)
+        .order_by(func.count(IpIntel.ip).desc())
+        .limit(10)
+        .all()
+    )
+    total = scoped.count() or 0
+    return {
+        "total_ips": int(total),
+        "countries": [{"country": country, "count": int(n)} for country, n in rows],
+    }
+
+
+@router.get("/ips/geo")
+async def ip_geo_points(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Account-scoped geo-plottable IP points (your emails' hop chains)."""
+    from sqlalchemy import func, select
+
+    hop_ips = _own_hop_ip_subquery(db, user)
+    rows = (
+        db.query(IpIntel)
+        .filter(
+            IpIntel.ip.in_(select(hop_ips.c.from_ip)),
+            IpIntel.lat.isnot(None),
+            IpIntel.lon.isnot(None),
+        )
+        .order_by(IpIntel.ip.asc())
+        .all()
+    )
+    total = db.query(func.count(IpIntel.ip)).filter(
+        IpIntel.ip.in_(select(hop_ips.c.from_ip))
+    ).scalar() or 0
+    return {
+        "points": [
+            {
+                "ip": r.ip,
+                "lat": r.lat,
+                "lng": r.lon,
+                "country": r.country,
+                "country_code": r.country_code,
+                "city": r.city,
+                "asn": r.asn,
+                "asn_org": r.asn_org,
+                "is_tor": bool(r.is_tor),
+                "is_vpn": bool(r.is_vpn),
+                "is_proxy": bool(r.is_proxy),
+                "is_hosting": bool(r.is_hosting),
+                "is_dnsbl_listed": bool(r.is_dnsbl_listed),
+            }
+            for r in rows
+        ],
+        "total_ips": total,
+        "geoed": len(rows),
+    }
+
+
+@router.get("/ips/{ip}")
+async def get_ip_intel(
+    ip: str,
+    refresh: bool = Query(False, description="Force live provider lookup"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    IP intelligence. Default is strictly cache-only; `refresh=true`
+    re-queries the configured provider (graceful when offline).
+    """
+    settings = get_settings()
+    ptr_resolver = _live_dns_resolver() if settings.HEADER_DNS_CHECKS_ENABLED else None
+    service = IpIntelService(db, ptr_resolver=ptr_resolver)
+    row = service.enrich(ip) if refresh else service.cached_only(ip)
+    if refresh and row is not None:
+        # get_db never commits — persist the fresh lookup for later reads.
+        db.commit()
+    if row is None:
+        return {"ip": ip, "intel": None}
+    return {"ip": ip, "intel": row.to_dict()}
+
+
+@router.get("/indicators")
+async def list_indicators(
+    q: Optional[str] = Query(None, description="Substring match on value"),
+    type: Optional[str] = Query(None, description="Filter by indicator type"),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """IoC search over this account's scans: aggregated by (type, value)."""
+    from sqlalchemy import func
+
+    query = (
+        db.query(
+            Indicator.type,
+            Indicator.value,
+            func.count(func.distinct(Indicator.scan_id)).label("scan_count"),
+            func.sum(Indicator.sighting_count).label("sightings"),
+            func.min(Indicator.first_seen).label("first_seen"),
+            func.max(Indicator.last_seen).label("last_seen"),
+        )
+        .filter(Indicator.user_id == user.id)
+    )
+    if type:
+        query = query.filter(Indicator.type == type)
+    if q:
+        query = query.filter(Indicator.value.contains(q.lower()))
+    rows = (
+        query.group_by(Indicator.type, Indicator.value)
+        .order_by(func.count(func.distinct(Indicator.scan_id)).desc(),
+                  func.max(Indicator.last_seen).desc())
+        .limit(limit)
+        .all()
+    )
+    payload = [
+        {
+            "type": r.type,
+            "value": r.value,
+            "scan_count": r.scan_count,
+            "sighting_count": int(r.sightings or 0),
+            "first_seen": r.first_seen.isoformat() if r.first_seen else None,
+            "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+        }
+        for r in rows
+    ]
+    return {"count": len(payload), "indicators": payload}
+
+
+# ── IoC export (STIX 2.1 / CSV) ─────────────────────────────────────────
+
+MAX_EXPORT_ROWS = 5000
+_MAX_RAW_ROWS = 20000
+
+_DOMAIN_INDICATOR_TYPES = {"sender_domain", "replyto_domain", "url_domain"}
+
+
+def _is_shared_service_domain(value: str) -> bool:
+    """True for domains an attacker cannot own (brand-owned / shared infra)."""
+    domain = registrable_domain(f"https://{value}") or (value or "").lower()
+    label = domain.split(".")[0]
+    if label in KNOWN_REGISTRABLE_LABELS or label in LEGIT_EMBEDDED:
+        return True
+    return any(
+        domain == trusted or domain.endswith(f".{trusted}")
+        for trusted in LEGITIMATE_SERVICE_DOMAINS
+    )
+
+
+def _aggregated_indicator_rows(
+    db: Session,
+    user_id: int,
+    *,
+    campaign_id: Optional[int] = None,
+    limit: int = MAX_EXPORT_ROWS,
+) -> list[dict]:
+    """Aggregate this account's indicators for export (per type+value).
+
+    Only indicators observed in *dangerous* scans are exported — a link that appeared in a legitimate email is not threat
+    intelligence. URL domains are additionally gated on the stored URL
+    result score (≥60 or a VirusTotal hit), so shared infrastructure such
+    as `google.com` is never labelled malicious just because a phish
+    contained a Google link.
+
+    Aggregation happens in Python so the same code works on PostgreSQL and
+    the SQLite test harness; raw rows are capped to keep the endpoint
+    bounded even for very large mailboxes.
+    """
+    query = (
+        db.query(Indicator)
+        .join(Scan, Scan.id == Indicator.scan_id)
+        .join(Verdict, Verdict.scan_id == Indicator.scan_id)
+        .filter(
+            Indicator.user_id == user_id,
+            Verdict.classification == "dangerous",
+        )
+    )
+    if campaign_id is not None:
+        query = query.filter(Scan.campaign_id == campaign_id)
+
+    raw = query.order_by(Indicator.id.desc()).limit(_MAX_RAW_ROWS).all()
+
+    # Domain-level risk from the URL engine (max score across scans).
+    domain_risk: dict[str, float] = {}
+    scan_ids = {row.scan_id for row in raw if row.scan_id is not None}
+    if scan_ids:
+        for url_row in (
+            db.query(UrlResult).filter(UrlResult.scan_id.in_(scan_ids)).all()
+        ):
+            host = registrable_domain(
+                url_row.normalized_url or url_row.original_url or ""
+            )
+            if not host:
+                continue
+            score = float(url_row.final_score or 0.0)
+            if (url_row.vt_malicious or 0) > 0:
+                score = max(score, 100.0)
+            domain_risk[host] = max(domain_risk.get(host, 0.0), score)
+
+    agg: dict[tuple, dict] = {}
+    for row in raw:
+        if row.type in _DOMAIN_INDICATOR_TYPES and _is_shared_service_domain(row.value):
+            continue
+        if row.type == "url_domain" and domain_risk.get(row.value, 0.0) < 60.0:
+            continue
+        key = (row.type, row.value)
+        bucket = agg.get(key)
+        if bucket is None:
+            bucket = {
+                "type": row.type,
+                "value": row.value,
+                "scan_ids": set(),
+                "sighting_count": 0,
+                "first_seen": row.first_seen,
+                "last_seen": row.last_seen,
+            }
+            agg[key] = bucket
+        if row.scan_id is not None:
+            bucket["scan_ids"].add(row.scan_id)
+        bucket["sighting_count"] += int(row.sighting_count or 1)
+        if row.first_seen and (
+            bucket["first_seen"] is None or row.first_seen < bucket["first_seen"]
+        ):
+            bucket["first_seen"] = row.first_seen
+        if row.last_seen and (
+            bucket["last_seen"] is None or row.last_seen > bucket["last_seen"]
+        ):
+            bucket["last_seen"] = row.last_seen
+
+    rows = [
+        {
+            "type": bucket["type"],
+            "value": bucket["value"],
+            "scan_count": len(bucket["scan_ids"]),
+            "sighting_count": bucket["sighting_count"],
+            "first_seen": bucket["first_seen"],
+            "last_seen": bucket["last_seen"],
+        }
+        for bucket in agg.values()
+    ]
+    rows.sort(key=lambda r: (-r["scan_count"], r["type"], r["value"]))
+    return rows[:limit]
+
+
+@router.get("/export/stix")
+async def export_stix(
+    campaign_id: Optional[int] = Query(None, description="Restrict to one campaign"),
+    limit: int = Query(MAX_EXPORT_ROWS, ge=1, le=MAX_EXPORT_ROWS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Download this account's IoCs as a STIX 2.1 bundle."""
+    rows = _aggregated_indicator_rows(
+        db, user.id, campaign_id=campaign_id, limit=limit
+    )
+    bundle = build_stix_bundle(rows)
+    return JSONResponse(
+        content=bundle,
+        headers={
+            "Content-Disposition": 'attachment; filename="phishing-guard-iocs.stix2.json"'
+        },
+    )
+
+
+@router.get("/export/csv")
+async def export_indicators_csv(
+    campaign_id: Optional[int] = Query(None, description="Restrict to one campaign"),
+    limit: int = Query(MAX_EXPORT_ROWS, ge=1, le=MAX_EXPORT_ROWS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Download this account's IoCs as CSV."""
+    rows = _aggregated_indicator_rows(
+        db, user.id, campaign_id=campaign_id, limit=limit
+    )
+    return Response(
+        content=build_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="phishing-guard-iocs.csv"'
+        },
+    )
+
+
+@router.get("/graph")
+async def get_graph(
+    min_score: float = Query(0.0, ge=0.0, le=100.0),
+    campaign_id: Optional[int] = None,
+    scan_id: Optional[int] = None,
+    limit: int = Query(500, ge=1, le=2000),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Attribution graph: node-capped JSON for the force-directed view."""
+    return build_graph_from_db(
+        db, min_score=min_score, campaign_id=campaign_id, scan_id=scan_id,
+        limit=limit, user_id=user.id,
+    )
+
+
+def _live_dns_resolver():
+    """Default dnspython resolver — only constructed when DNS is opted in."""
+    from app.engines.headers.dns_checks import _default_resolver
+
+    return _default_resolver
+
+
+@router.get("/campaigns")
+async def list_campaigns(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    query = db.query(Campaign).filter(Campaign.user_id == user.id)
+    if status:
+        query = query.filter(Campaign.status == status)
+    rows = query.order_by(Campaign.email_count.desc(), Campaign.avg_score.desc()).all()
+    return {"count": len(rows), "campaigns": [c.to_dict() for c in rows]}
+
+
+@router.post("/campaigns/recluster")
+async def recluster_campaigns(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Backfill: rebuild campaign clusters over this account's scans.
+
+    Replaces only this account's campaign rows (derived data, always
+    regenerable from indicators + subjects).
+    """
+    rows = (
+        db.query(Scan, Verdict, Email)
+        .join(Verdict, Verdict.scan_id == Scan.id)
+        .join(Email, Email.id == Scan.email_id)
+        .filter(Scan.user_id == user.id)
+        .all()
+    )
+    if not rows:
+        return {"campaigns": [], "scans_clustered": 0, "scans_total": 0}
+
+    scan_ids = [s.id for s, _, _ in rows]
+    indicators = (
+        db.query(Indicator).filter(Indicator.scan_id.in_(scan_ids)).all()
+    )
+    by_scan: dict = {}
+    for ind in indicators:
+        by_scan.setdefault(ind.scan_id, []).append((ind.type, ind.value))
+
+    inputs = [
+        ScanInput(
+            id=scan.id,
+            subject=email.subject or "",
+            score=verdict.final_score,
+            indicators=tuple(by_scan.get(scan.id, ())),
+            sent_at=scan.completed_at or email.fetched_at,
+        )
+        for scan, verdict, email in rows
+    ]
+
+    clusters = cluster_scans(inputs)
+    campaigns = save_clusters(db, clusters, user_id=user.id)
+    db.commit()
+
+    return {
+        "campaigns": [c.to_dict() for c in campaigns],
+        "scans_clustered": sum(c.email_count for c in campaigns),
+        "scans_total": len(rows),
+    }
+
+
+@router.get("/campaigns/{campaign_id}")
+async def get_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    owned_or_404(campaign, user)
+    members = (
+        db.query(Scan, Verdict, Email)
+        .outerjoin(Verdict, Verdict.scan_id == Scan.id)
+        .join(Email, Email.id == Scan.email_id)
+        .filter(Scan.campaign_id == campaign_id)
+        .order_by(Verdict.final_score.desc())
+        .all()
+    )
+
+    technique_inputs = []
+    for scan, verdict, _email in members:
+        techniques = map_attack_techniques(
+            (verdict.breakdown or {}) if verdict else {},
+            final_score=verdict.final_score if verdict else 0.0,
+            classification=verdict.classification if verdict else None,
+        )
+        if techniques:
+            technique_inputs.append((scan.id, techniques))
+
+    aggregated = aggregate_techniques(technique_inputs)
+
+    return {
+        "campaign": campaign.to_dict(),
+        "techniques": aggregated,
+        "tactics": summarize_tactics(aggregated),
+        "scans": [
+            {
+                "scan_id": scan.id,
+                "email_id": email.id,
+                "subject": email.subject,
+                "sender": email.sender,
+                "final_score": verdict.final_score if verdict else 0.0,
+                "classification": verdict.classification if verdict else None,
+            }
+            for scan, verdict, email in members
+        ],
+    }
+
+
+# ── Case management (plan §5 B4 — status/notes update) ──────────────────
+
+CAMPAIGN_STATUSES = {"open", "new", "investigating", "closed"}
+
+
+class CampaignUpdate(BaseModel):
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.patch("/campaigns/{campaign_id}")
+async def update_campaign(
+    campaign_id: int,
+    payload: CampaignUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Update analyst-managed campaign fields: status + notes (B4).
+
+    `status` is validated against the workflow set; `open` remains the
+    default so existing filters keep working.
+    """
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    owned_or_404(campaign, user)
+
+    if payload.status is not None:
+        if payload.status not in CAMPAIGN_STATUSES:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Invalid status '{payload.status}' — expected one of "
+                    f"{sorted(CAMPAIGN_STATUSES)}"
+                ),
+            )
+        campaign.status = payload.status
+    if payload.notes is not None:
+        campaign.notes = payload.notes[:4000]
+
+    db.commit()
+    db.refresh(campaign)
+    return {"campaign": campaign.to_dict()}
+
+
+# ── Domain intelligence (plan §5 B1) ─────────────────────────────────────
+
+
+@router.get("/domains/{domain}/intel")
+async def get_domain_intel(
+    domain: str,
+    dns: Optional[bool] = None,
+    rdap: Optional[bool] = None,
+    user: User = Depends(get_current_user),
+):
+    """DNS posture + RDAP registration age for one sending domain (B1).
+
+    Lookups default to the `DOMAIN_INTEL_*_ENABLED` settings (offline in
+    tests/demos) and can be overridden per request with `?dns=`/`?rdap=`.
+    Failures degrade to `null` fields + `errors` — never a 500.
+    """
+    from app.config import get_settings
+    from app.engines.intel.domain_intel import assess_domain, is_valid_domain
+
+    if not is_valid_domain(domain):
+        raise HTTPException(status_code=422, detail="Invalid domain name")
+
+    settings = get_settings()
+    use_dns = settings.DOMAIN_INTEL_DNS_ENABLED if dns is None else dns
+    use_rdap = settings.DOMAIN_INTEL_RDAP_ENABLED if rdap is None else rdap
+
+    intel = assess_domain(domain, use_dns=use_dns, use_rdap=use_rdap)
+    payload = intel.to_dict()
+    payload["lookups"] = {"dns": use_dns, "rdap": use_rdap}
+    return payload

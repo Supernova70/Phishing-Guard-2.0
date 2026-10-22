@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Paperclip,
@@ -6,17 +6,21 @@ import {
   Code,
   File,
   Search,
-  ExternalLink,
   Shield,
   AlertTriangle,
+  QrCode,
+  Upload,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import { getAttachments } from '../api/client';
+import { scanQrUpload } from '../api/forensics';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
-import { formatDistanceToNow } from 'date-fns';
 import type { AttachmentSummary } from '../api/client';
+import type { QrScanResult } from '../types';
 
 // ─── File Type Icon ───────────────────────────────────────────────────────────
-function FileTypeIcon({ filename, contentType }: { filename: string; contentType: string | null }) {
+function FileTypeIcon({ filename }: { filename: string }) {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   if (['pdf'].includes(ext)) return <FileText size={20} style={{ color: '#EF4444' }} />;
   if (['exe', 'dll', 'bat', 'ps1', 'cmd'].includes(ext)) return <Code size={20} style={{ color: '#F59E0B' }} />;
@@ -67,7 +71,7 @@ function AttachmentCard({
       }}
     >
       <div style={{ flexShrink: 0, marginTop: 2 }}>
-        <FileTypeIcon filename={att.filename} contentType={att.content_type} />
+        <FileTypeIcon filename={att.filename} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -115,12 +119,257 @@ function AttachmentCard({
   );
 }
 
+// ─── QR / Quishing Inspector ──────────────────────────────────────────────────
+const MAX_QR_UPLOAD = 10 * 1024 * 1024;
+
+function scoreColor(score: number): string {
+  if (score >= 60) return 'var(--danger)';
+  if (score >= 25) return 'var(--warning)';
+  return 'var(--safe)';
+}
+
+function QrInspector() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [result, setResult] = useState<QrScanResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (picked: File | null) => {
+    if (!picked) return;
+    setFile(picked);
+    setResult(null);
+    setError(null);
+    if (picked.size > MAX_QR_UPLOAD) {
+      setError('File is larger than the 10 MB limit.');
+      return;
+    }
+    setLoading(true);
+    try {
+      setResult(await scanQrUpload(picked));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'QR scan failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border-default)',
+        borderRadius: 8,
+        padding: 20,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <QrCode size={18} style={{ color: 'var(--primary)' }} />
+        <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          QR / Quishing Inspector
+        </p>
+      </div>
+      <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+        Decode a QR code from an image or PDF and score the URL it hides. Static inspection only —
+        the target is never opened in a browser.
+      </p>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/bmp,image/tiff,image/webp,application/pdf"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          void handleFile(e.target.files?.[0] ?? null);
+          e.currentTarget.value = '';
+        }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={loading}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 14px',
+            borderRadius: 6,
+            border: '1px solid var(--primary)',
+            background: 'transparent',
+            color: 'var(--primary)',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            cursor: loading ? 'wait' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Upload size={14} />}
+          {loading ? 'Decoding…' : 'Choose image or PDF'}
+        </button>
+        {file && (
+          <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            {file.name} · {(file.size / 1024).toFixed(1)} KB
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <p style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--text-danger)' }}>{error}</p>
+      )}
+
+      {result && (
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {result.code_count === 0 ? (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{result.note}</p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {result.code_count} symbol{result.code_count === 1 ? '' : 's'} decoded
+                </span>
+                {result.max_url_score > 0 && (
+                  <span
+                    className="font-mono"
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: 'var(--bg-input)',
+                      color: scoreColor(result.max_url_score),
+                    }}
+                  >
+                    max URL score {Math.round(result.max_url_score)}
+                  </span>
+                )}
+                {result.note && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{result.note}</span>
+                )}
+              </div>
+
+              {result.codes.map((code, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 6,
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      {code.format}
+                      {code.page ? ` · page ${code.page}` : ''}
+                    </span>
+                    {!code.is_url && (
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>non-URL payload</span>
+                    )}
+                  </div>
+                  <p
+                    className="font-mono"
+                    style={{ fontSize: '0.75rem', color: 'var(--text-primary)', marginTop: 6, wordBreak: 'break-all' }}
+                  >
+                    {code.value}
+                  </p>
+                </div>
+              ))}
+
+              {result.url_analysis.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    URL risk analysis
+                  </p>
+                  {result.url_analysis.map((u, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'flex-start',
+                        padding: '10px 12px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border-default)',
+                      }}
+                    >
+                      <span
+                        className="font-mono"
+                        style={{
+                          fontSize: '0.85rem',
+                          fontWeight: 900,
+                          minWidth: 38,
+                          textAlign: 'right',
+                          color: scoreColor(u.score),
+                        }}
+                      >
+                        {Math.round(u.score)}
+                      </span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            className="font-mono"
+                            style={{ fontSize: '0.75rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}
+                          >
+                            {u.final_url || u.url}
+                          </span>
+                          <ExternalLink size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                        </div>
+                        {u.flags.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                            {u.flags.slice(0, 6).map((flag, fi) => (
+                              <span
+                                key={fi}
+                                style={{
+                                  fontSize: '0.65rem',
+                                  padding: '1px 6px',
+                                  borderRadius: 3,
+                                  background: 'var(--warning-subtle)',
+                                  color: 'var(--warning)',
+                                }}
+                              >
+                                {flag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {u.vt_total > 0 && (
+                          <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 5 }}>
+                            VirusTotal: {u.vt_malicious}/{u.vt_total} engines flagged this URL
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Attachments Page ─────────────────────────────────────────────────────────
+type SortKey = 'date' | 'filename' | 'score' | 'size';
+
 export function AttachmentsPage() {
   const [attachments, setAttachments] = useState<AttachmentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getAttachments(0, 200)
@@ -129,14 +378,26 @@ export function AttachmentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = search
-    ? attachments.filter(
-        (a) =>
-          a.filename.toLowerCase().includes(search.toLowerCase()) ||
-          a.email_sender.toLowerCase().includes(search.toLowerCase()) ||
-          a.email_subject.toLowerCase().includes(search.toLowerCase())
-      )
-    : attachments;
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    const list = search
+      ? attachments.filter(
+          (a) =>
+            a.filename.toLowerCase().includes(q) ||
+            a.email_sender.toLowerCase().includes(q) ||
+            a.email_subject.toLowerCase().includes(q)
+        )
+      : attachments;
+    const dir = sortDir === 'desc' ? -1 : 1;
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'filename') cmp = a.filename.localeCompare(b.filename);
+      else if (sortKey === 'score') cmp = (a.latest_scan_score ?? -1) - (b.latest_scan_score ?? -1);
+      else if (sortKey === 'size') cmp = a.size_bytes - b.size_bytes;
+      else cmp = a.id - b.id; // insertion order ≈ ingest date
+      return cmp === 0 ? b.id - a.id : cmp * dir;
+    });
+  }, [attachments, search, sortKey, sortDir]);
 
   const stats = {
     total: attachments.length,
@@ -186,17 +447,53 @@ export function AttachmentsPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div style={{ position: 'relative' }}>
-        <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-        <input
-          className="dark-input"
-          style={{ width: '100%', paddingLeft: 36 }}
-          placeholder="Search by filename, sender, or subject…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + Sort */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="dark-input"
+            style={{ width: '100%', paddingLeft: 36 }}
+            placeholder="Search by filename, sender, or subject…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sort:</span>
+          <select
+            className="dark-input"
+            style={{ fontSize: '0.75rem', padding: '5px 8px' }}
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+          >
+            <option value="date">Date</option>
+            <option value="filename">Filename</option>
+            <option value="score">Score</option>
+            <option value="size">Size</option>
+          </select>
+          <button
+            onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+            title={sortDir === 'desc' ? 'Descending — click for ascending' : 'Ascending — click for descending'}
+            style={{
+              padding: '5px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--border-default)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {sortDir === 'desc' ? '↓ desc' : '↑ asc'}
+          </button>
+        </div>
       </div>
+
+      {/* QR / Quishing inspector */}
+      <QrInspector />
 
       {/* Attachment Grid */}
       {loading ? (

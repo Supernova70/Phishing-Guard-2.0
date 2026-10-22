@@ -1,15 +1,153 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react';
-import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, type ThreatSummary } from '../api/client';
+import { ArrowLeft, Brain, Link2, Paperclip, ExternalLink, AlertTriangle, ChevronDown, ChevronRight, ShieldAlert, FileText, QrCode, Flag, Check, MessageSquare } from 'lucide-react';
+import { getScan, getEmail, resolveScreenshotUrl, getThreatSummary, getScanFindings, getScanThread, type ThreatSummary, type AttackTechnique, type ScanFinding, type ScanThreadResponse, type ConversationMetadata } from '../api/client';
+import { getVerdictFeedback, submitVerdictFeedback, type FeedbackLabel, type VerdictFeedbackEntry } from '../api/forensics';
 import { ClassificationBadge, ScoreBadge } from '../components/ui/Badge';
 import { ScoreBar } from '../components/ui/ScoreBar';
 import { ScoreGauge } from '../components/ui/ScoreGauge';
 import { JsonViewer } from '../components/ui/JsonViewer';
+import { HeaderForensics } from '../components/forensics/HeaderForensics';
 import { formatDistanceToNow, format } from 'date-fns';
-import type { Scan, EmailDetail, ScanBreakdown } from '../types';
+import type { Scan, EmailDetail, ScanBreakdown, Classification } from '../types';
 import { getVtUrlLink, getVtFileLink } from '../utils/virustotal';
+
+// ─── Verdict Feedback ────────────────────────────────────────────────────────
+const FEEDBACK_OPTIONS: Array<{ label: FeedbackLabel; title: string; color: string }> = [
+  { label: 'phishing', title: 'Phishing', color: 'var(--danger)' },
+  { label: 'legitimate', title: 'Legitimate', color: 'var(--safe)' },
+  { label: 'unsure', title: 'Not sure', color: 'var(--text-muted)' },
+];
+
+function VerdictFeedbackCard({ scanId, prediction }: { scanId: number; prediction: Classification }) {
+  const [existing, setExisting] = useState<VerdictFeedbackEntry | null>(null);
+  const [selected, setSelected] = useState<FeedbackLabel | null>(null);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getVerdictFeedback(scanId)
+      .then((fb) => {
+        if (!active) return;
+        setExisting(fb);
+        setSelected(fb?.label ?? null);
+        setComment(fb?.comment ?? '');
+      })
+      .catch(() => { /* feedback is optional — never block the page */ })
+      .finally(() => active && setLoaded(true));
+    return () => { active = false; };
+  }, [scanId]);
+
+  const save = async (label: FeedbackLabel) => {
+    setSelected(label);
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const row = await submitVerdictFeedback(scanId, label, comment);
+      setExisting(row);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save feedback');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Flag size={16} style={{ color: 'var(--primary)' }} />
+        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          Was this verdict right?
+        </p>
+        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          Your label is the ground truth used to measure the model.
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        {FEEDBACK_OPTIONS.map((option) => {
+          const active = selected === option.label;
+          return (
+            <button
+              key={option.label}
+              onClick={() => void save(option.label)}
+              disabled={saving || !loaded}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: saving ? 'wait' : 'pointer',
+                background: active ? 'var(--bg-input)' : 'transparent',
+                border: `1px solid ${active ? option.color : 'var(--border-default)'}`,
+                color: active ? option.color : 'var(--text-secondary)',
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              {active && <Check size={12} />}
+              {option.title}
+            </button>
+          );
+        })}
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+          Model said <strong style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{prediction}</strong>
+        </span>
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={(e) => { setComment(e.target.value); setSaved(false); }}
+        placeholder="Optional note — why is this verdict wrong or right?"
+        maxLength={1000}
+        rows={2}
+        style={{
+          width: '100%',
+          marginTop: 12,
+          padding: '8px 10px',
+          borderRadius: 6,
+          border: '1px solid var(--border-default)',
+          background: 'var(--bg-input)',
+          color: 'var(--text-primary)',
+          fontSize: '0.78rem',
+          resize: 'vertical',
+          fontFamily: 'inherit',
+        }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          onClick={() => selected && void save(selected)}
+          disabled={!selected || saving}
+          style={{ fontSize: '0.72rem', padding: '4px 12px', opacity: !selected || saving ? 0.55 : 1 }}
+        >
+          {saving ? 'Saving…' : 'Save note'}
+        </button>
+        {saved && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--safe)' }}>
+            Feedback saved — dashboard metrics updated.
+          </span>
+        )}
+        {existing && !saved && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+            Current label: <strong style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{existing.label}</strong>
+          </span>
+        )}
+        {error && <span style={{ fontSize: '0.72rem', color: 'var(--text-danger)' }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
 
 // ─── Verdict Hero ─────────────────────────────────────────────────────────────
 function VerdictHero({ scan }: { scan: Scan }) {
@@ -190,7 +328,15 @@ function UrlRow({ urlEntry }: { urlEntry: ScanBreakdown['url']['per_url'][0] }) 
 }
 
 // ─── YARA Match Card ──────────────────────────────────────────────────────────
-function YaraMatchCard({ match }: { match: { rule: string; severity: string; tags: string[]; description: string } }) {
+function YaraMatchCard({ match }: { match: {
+  rule: string;
+  severity: string;
+  tags: string[];
+  description: string;
+  explanation?: string;
+  matched_strings?: string[];
+  evidence?: Array<{ string: string; offset: number; preview: string; count: number }>;
+} }) {
   return (
     <div style={{
       background: 'var(--danger-subtle)',
@@ -202,9 +348,36 @@ function YaraMatchCard({ match }: { match: { rule: string; severity: string; tag
       alignItems: 'flex-start',
     }}>
       <AlertTriangle size={14} style={{ color: 'var(--danger)', flexShrink: 0, marginTop: 2 }} />
-      <div>
+      <div style={{ minWidth: 0, flex: 1 }}>
         <p className="font-mono" style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-danger)' }}>{match.rule}</p>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>{match.description}</p>
+        {match.explanation && (
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 4 }}>
+            {match.explanation}
+          </p>
+        )}
+        {match.evidence && match.evidence.length > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Matched evidence
+            </p>
+            {match.evidence.map((ev, i) => (
+              <p key={i} className="font-mono" style={{
+                fontSize: '0.7rem',
+                color: 'var(--text-secondary)',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 4,
+                padding: '3px 8px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {ev.string} @ 0x{ev.offset.toString(16)}{' · '}{ev.count}×{' · '}“{ev.preview}”
+              </p>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.65rem', background: 'rgba(239,68,68,0.2)', color: 'var(--text-danger)', padding: '1px 6px', borderRadius: 3, fontWeight: 700 }}>
             {match.severity.toUpperCase()}
@@ -246,6 +419,13 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
   const borderColor = summary.classification === 'dangerous'
     ? 'var(--danger)' : summary.classification === 'suspicious'
     ? 'var(--warning)' : 'var(--safe)';
+
+  const techniques = summary.techniques ?? [];
+  const byTactic = techniques.reduce<Record<string, AttackTechnique[]>>((acc, tech) => {
+    (acc[tech.tactic] ||= []).push(tech);
+    return acc;
+  }, {});
+  const tacticCount = Object.keys(byTactic).length;
 
   return (
     <motion.div
@@ -327,7 +507,199 @@ function ThreatSummaryCard({ scanId }: { scanId: number }) {
           </div>
         </div>
       )}
+
+      {/* MITRE ATT&CK Coverage */}
+      {techniques.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              MITRE ATT&amp;CK Coverage
+            </p>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              {techniques.length} technique{techniques.length !== 1 ? 's' : ''} · {tacticCount} tactic{tacticCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {Object.entries(byTactic).map(([tactic, list]) => (
+              <div key={tactic}>
+                <p style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  {tactic}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {list.map((tech) => {
+                    const confColor = tech.confidence === 'high'
+                      ? 'var(--primary)'
+                      : tech.confidence === 'medium'
+                      ? 'var(--warning)'
+                      : 'var(--text-muted)';
+                    return (
+                      <div key={tech.id} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <a
+                            href={tech.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.72rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}
+                          >
+                            {tech.id} ↗
+                          </a>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>{tech.name}</span>
+                          <span style={{
+                            marginLeft: 'auto',
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            color: confColor,
+                            border: `1px solid ${confColor}`,
+                            borderRadius: 999,
+                            padding: '1px 7px',
+                          }}>
+                            {tech.confidence}
+                          </span>
+                        </div>
+                        {tech.evidence.slice(0, 3).map((line, i) => (
+                          <p key={i} style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 4, paddingLeft: 2 }}>
+                            • {line}
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </motion.div>
+  );
+}
+
+// ─── Conversation / thread BEC card ──────────────────────────────────────────
+function ConversationCard({ scanId }: { scanId: number }) {
+  const [findings, setFindings] = useState<ScanFinding[]>([]);
+  const [conversation, setConversation] = useState<ConversationMetadata | null>(null);
+  const [thread, setThread] = useState<ScanThreadResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.allSettled([getScanFindings(scanId), getScanThread(scanId)])
+      .then(([findingsResult, threadResult]) => {
+        if (!active) return;
+        if (findingsResult.status === 'fulfilled') {
+          const conversationFindings = findingsResult.value.findings.filter(
+            (item) =>
+              item.category === 'thread' ||
+              item.category === 'bec' ||
+              item.category === 'identity' ||
+              item.category === 'kit' ||
+              item.category === 'active_content',
+          );
+          setFindings(conversationFindings);
+          setConversation(findingsResult.value.conversation);
+        }
+        if (threadResult.status === 'fulfilled') setThread(threadResult.value);
+        if (findingsResult.status === 'rejected' && threadResult.status === 'rejected') {
+          setError('Conversation evidence unavailable');
+        }
+      })
+      .catch(() => active && setError('Conversation evidence unavailable'));
+    return () => { active = false; };
+  }, [scanId]);
+
+  if (error) return null;
+  if (!conversation && !thread) return null;
+  if ((conversation?.prior_messages ?? 0) === 0 && findings.length === 0) return null;
+
+  const severityColor = (severity: number) =>
+    severity >= 65 ? 'var(--danger)' : severity >= 30 ? 'var(--warning)' : 'var(--primary)';
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <MessageSquare size={17} style={{ color: 'var(--primary)' }} />
+        <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+          Identity &amp; Conversation
+        </p>
+        <span style={{
+          fontSize: '0.62rem',
+          fontWeight: 700,
+          color: 'var(--warning)',
+          border: '1px solid var(--warning)',
+          borderRadius: 999,
+          padding: '1px 7px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}>
+          Shadow · score unchanged
+        </span>
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {conversation?.prior_messages ?? 0} earlier message{(conversation?.prior_messages ?? 0) === 1 ? '' : 's'} in thread
+        </span>
+      </div>
+
+      {conversation?.thread_key && (
+        <p className="font-mono" style={{ fontSize: '0.66rem', color: 'var(--text-muted)', marginTop: 8, wordBreak: 'break-all' }}>
+          {conversation.thread_key}
+        </p>
+      )}
+
+      {findings.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          {findings.map((finding) => (
+            <div key={finding.id} style={{
+              background: 'var(--bg-input)',
+              borderLeft: `3px solid ${severityColor(finding.severity)}`,
+              borderRadius: '0 6px 6px 0',
+              padding: '9px 12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{finding.title}</span>
+                <span className="font-mono" style={{ fontSize: '0.62rem', color: severityColor(finding.severity), marginLeft: 'auto' }}>
+                  {finding.code} · {finding.severity.toFixed(0)}
+                </span>
+              </div>
+              {finding.evidence.slice(0, 2).map((evidence, index) => (
+                <p key={index} className="font-mono" style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 4, wordBreak: 'break-word' }}>
+                  {evidence.kind}: {evidence.value}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {findings.length === 0 && (
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 10 }}>
+          No conversation-specific risk signals were found in this thread.
+        </p>
+      )}
+
+      {thread && thread.messages.length > 1 && (
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+          <p style={{ fontSize: '0.66rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Thread timeline
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {thread.messages.map((message) => (
+              <div key={message.email_id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', opacity: message.is_current ? 1 : 0.72 }}>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', minWidth: 20 }}>#{message.email_id}</span>
+                <span style={{ fontSize: '0.72rem', color: message.is_current ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: message.is_current ? 700 : 400, flex: 1 }}>
+                  {message.subject}
+                </span>
+                <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {message.sender}
+                </span>
+                {message.has_attachments && <Paperclip size={11} style={{ color: 'var(--text-muted)' }} />}
+                {message.is_current && <span style={{ fontSize: '0.6rem', color: 'var(--primary)' }}>current</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -342,14 +714,16 @@ export function ScanDetail() {
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
+    queueMicrotask(() => setLoading(true));
     getScan(Number(id))
       .then(async (s) => {
         setScan(s);
         try {
           const em = await getEmail(s.email_id);
           setEmail(em);
-        } catch {}
+        } catch {
+          /* email context is optional — scan still renders */
+        }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load scan'))
       .finally(() => setLoading(false));
@@ -397,11 +771,33 @@ export function ScanDetail() {
       {/* Email Info */}
       {email && (
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '16px 20px' }}>
-          <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Email Details</p>
-          <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{email.subject}</p>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>From: {email.sender} · {email.date ? format(new Date(email.date), 'PPpp') : '—'}</p>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Email Details</p>
+              <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>{email.subject}</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>From: {email.sender} · {email.date ? format(new Date(email.date), 'PPpp') : '—'}</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button
+                className="btn-ghost"
+                onClick={() => navigate(`/scans/${scan.id}/report`)}
+                style={{ fontSize: '0.72rem', padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <FileText size={12} /> Forensic Report
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Conversation-aware BEC (shadow) */}
+      {v && <ConversationCard scanId={scan.id} />}
+
+      {/* Analyst feedback (ground truth for model metrics) */}
+      {v && <VerdictFeedbackCard scanId={scan.id} prediction={v.classification} />}
+
+      {/* Header forensics */}
+      <HeaderForensics emailId={scan.email_id} flags={bd?.header?.flags ?? []} rules={bd?.header?.rules ?? []} />
 
       {/* Engine Breakdown */}
       {v && (
@@ -485,6 +881,60 @@ export function ScanDetail() {
                   </div>
                   <ScoreBar score={file.risk_score} label="Risk Score" />
 
+                  {/* Why this score — explainable breakdown */}
+                  {(file.score_breakdown?.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-input)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                      <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                        Why this score
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {file.score_breakdown!.map((entry, k) => (
+                          <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                            <span className="font-mono" style={{
+                              fontSize: '0.7rem', fontWeight: 700, flexShrink: 0, minWidth: 44, textAlign: 'right',
+                              color: entry.points >= 60 ? '#EF4444' : entry.points >= 25 ? '#F59E0B' : 'var(--text-muted)',
+                            }}>
+                              +{entry.points}
+                            </span>
+                            <div style={{ minWidth: 0 }}>
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}>{entry.signal}</span>
+                              {entry.detail && (
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}> — {entry.detail}</span>
+                              )}
+                              {entry.evidence && entry.evidence.length > 0 && (
+                                <div style={{ marginTop: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {entry.evidence.map((ev, ei) => (
+                                    <p key={ei} className="font-mono" style={{
+                                      fontSize: '0.68rem', color: 'var(--text-secondary)',
+                                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                    }}>{ev}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Embedded URLs (metadata vs payload) */}
+                  {(file.embedded_urls?.length ?? 0) > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                        Embedded URLs ({file.embedded_urls!.length})
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {file.embedded_urls!.map((u, ui) => (
+                          <p key={ui} className="font-mono" style={{
+                            fontSize: '0.68rem', color: 'var(--text-secondary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>{u}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* VT Hash Results */}
                   {(file.vt_total ?? 0) > 0 && (
                     <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--bg-input)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
@@ -554,6 +1004,54 @@ export function ScanDetail() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Quishing (QR codes hidden in attachments) */}
+          {bd?.qr?.present && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <QrCode size={16} style={{ color: 'var(--primary)' }} />
+                <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Quishing — QR / barcode payloads
+                </p>
+                <span className="font-mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 4 }}>
+                  {bd.qr.code_count} symbol{bd.qr.code_count === 1 ? '' : 's'} ·{' '}
+                  {bd.qr.url_count} URL{bd.qr.url_count === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {bd.qr.codes.map((code, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 6,
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        {code.format} · {code.container}
+                        {code.page ? ` · page ${code.page}` : ''}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: code.is_url ? 'var(--warning)' : 'var(--text-muted)' }}>
+                        {code.is_url ? 'URL payload' : 'non-URL payload'}
+                      </span>
+                    </div>
+                    <p className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                      {code.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 10 }}>
+                Decoded URLs are scored by the URL engine and included in the URL score
+                {bd.qr.score > 0 ? ` (max ${Math.round(bd.qr.score)})` : ''}.
+              </p>
             </div>
           )}
 
